@@ -12,8 +12,8 @@ contract ValidatorsTest is Test {
     }
 
     function test_getValidators() public view {
-        Validator[] memory validators = reader.getValidators(0, 10);
-        assertEq(validators.length, 10);
+        Validator[] memory validators = reader.getValidators(0, 30);
+        assertEq(validators.length, 30);
 
         address operatorAddrs = 0x343dA7Ff0446247ca47AA41e2A25c5Bbb230ED0A;
         address creditAddrs = 0xeC06CB25d9add4bDd67B61432163aFF9028Aa921;

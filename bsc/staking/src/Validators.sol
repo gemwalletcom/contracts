@@ -9,7 +9,7 @@ struct Validator {
     bool jailed;
     uint256 jailUntil;
     string moniker;
-    uint256 commission;
+    uint64 commission;
 }
 
 contract ValidatorsReader {
@@ -27,10 +27,13 @@ contract ValidatorsReader {
         (
             address[] memory operatorAddrs,
             address[] memory creditAddrs,
-
+            uint256 totalLength
         ) = stakeHub.getValidators(offset, limit);
-        Validator[] memory validators = new Validator[](limit);
-        for (uint256 i = 0; i < limit; i++) {
+
+        uint256 validatorCount = totalLength < limit ? totalLength : limit;
+        Validator[] memory validators = new Validator[](validatorCount);
+
+        for (uint256 i = 0; i < validatorCount; i++) {
             (, bool jailed, uint256 jailUntil) = stakeHub.getValidatorBasicInfo(
                 operatorAddrs[i]
             );
