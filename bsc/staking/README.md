@@ -36,7 +36,7 @@ anvil
 ### Deploy
 
 ```shell
-forge script script/Validators.s.sol:ValidatorsScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+forge script script/HubReader.s.sol:HubReaderScript --rpc-url "$BSC_RPC_URL" --broadcast --verify -vvvv
 ```
 
 ### Cast

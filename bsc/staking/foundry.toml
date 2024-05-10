@@ -4,4 +4,7 @@ out = "out"
 libs = ["lib"]
 
 [rpc_endpoints]
-bsc = "https://bsc-dataseed1.binance.org"
+bsc = "${BSC_RPC_URL}"
+
+[etherscan]
+bsc = { key = "${BSCSCAN_API_KEY}" }
