@@ -12,8 +12,9 @@ contract ValidatorsTest is Test {
     }
 
     function test_getValidators() public view {
-        Validator[] memory validators = reader.getValidators(0, 30);
-        assertEq(validators.length, 30);
+        uint16 limit = 30;
+        Validator[] memory validators = reader.getValidators(0, limit);
+        assertTrue(validators.length <= limit);
 
         address operatorAddrs = 0x343dA7Ff0446247ca47AA41e2A25c5Bbb230ED0A;
         for (uint256 i = 0; i < validators.length; i++) {

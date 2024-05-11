@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {IStakeHub, Description, Commission} from "./interface/IStakeHub.sol";
+import {IStakeHub} from "./interface/IStakeHub.sol";
 import {IStakeCredit} from "./interface/IStakeCredit.sol";
 
 struct Validator {
@@ -30,26 +30,24 @@ contract HubReader {
     ) external view returns (Validator[] memory) {
         (address[] memory operatorAddrs, , uint256 totalLength) = stakeHub
             .getValidators(offset, limit);
-
         uint256 validatorCount = totalLength < limit ? totalLength : limit;
         Validator[] memory validators = new Validator[](validatorCount);
 
-        for (uint256 i = 0; i < validatorCount; ++i) {
+        for (uint256 i = 0; i < validatorCount; i++) {
             (, bool jailed, ) = stakeHub.getValidatorBasicInfo(
                 operatorAddrs[i]
             );
-
-            Description memory description = stakeHub.getValidatorDescription(
-                operatorAddrs[i]
-            );
-            Commission memory commission = stakeHub.getValidatorCommission(
-                operatorAddrs[i]
-            );
+            string memory moniker = stakeHub
+                .getValidatorDescription(operatorAddrs[i])
+                .moniker;
+            uint64 rate = stakeHub
+                .getValidatorCommission(operatorAddrs[i])
+                .rate;
 
             validators[i] = Validator({
                 operatorAddress: operatorAddrs[i],
-                moniker: description.moniker,
-                commission: commission.rate,
+                moniker: moniker,
+                commission: rate,
                 jailed: jailed
             });
         }
@@ -69,9 +67,11 @@ contract HubReader {
         uint256 validatorCount = totalLength < limit ? totalLength : limit;
         uint256 delegationCount = 0;
         Delegation[] memory delegations = new Delegation[](validatorCount);
+
         for (uint256 i = 0; i < validatorCount; i++) {
             IStakeCredit creditContract = IStakeCredit(creditAddrs[i]);
             uint256 amount = creditContract.getPooledBNB(delegator);
+
             if (amount > 0) {
                 delegations[delegationCount] = Delegation({
                     delegatorAddress: delegator,
@@ -81,10 +81,11 @@ contract HubReader {
                 delegationCount++;
             }
         }
-        Delegation[] memory result = new Delegation[](delegationCount);
-        for (uint256 i = 0; i < delegationCount; ++i) {
-            result[i] = delegations[i];
+
+        // Resize the array to fit actual number of delegations
+        assembly {
+            mstore(delegations, delegationCount)
         }
-        return result;
+        return delegations;
     }
 }
