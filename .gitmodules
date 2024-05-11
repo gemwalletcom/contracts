@@ -1,3 +1,3 @@
-[submodule "bsc/staking/lib/forge-std"]
-	path = bsc/staking/lib/forge-std
+[submodule "bsc/hub_reader/lib/forge-std"]
+	path = bsc/hub_reader/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
