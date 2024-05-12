@@ -24,6 +24,13 @@ contract HubReader {
         stakeHub = IStakeHub(0x0000000000000000000000000000000000002002);
     }
 
+    /*
+     * @dev Get validators by offset and limit (pagination)
+     * @param offset The offset to query validators
+     * @param limit The limit to query validators
+     *
+     * @return The validators
+     */
     function getValidators(
         uint16 offset,
         uint16 limit
@@ -54,6 +61,14 @@ contract HubReader {
         return validators;
     }
 
+    /*
+     * @dev Get current delegations of a delegator
+     * @param delegator The address of the delegator
+     * @param offset The offset to query validators
+     * @param limit The limit to query validators
+     *
+     * @return The delegations of the delegator
+     */
     function getDelegations(
         address delegator,
         uint16 offset,
@@ -87,5 +102,36 @@ contract HubReader {
             mstore(delegations, delegationCount)
         }
         return delegations;
+    }
+
+    /*
+     * @dev Get APYs of an array of validators at a given timestamp
+     * @param operatorAddr The address of the validator
+     * @param timestamp The timestamp of the block
+     *
+     * @return The APYs of the validator in basis points, e.g. 195 is 1.95%
+     */
+    function getAPYs(
+        address[] memory operatorAddrs,
+        uint256 timestamp
+    ) external view returns (uint64[] memory) {
+        uint256 dayIndex = timestamp / stakeHub.BREATHE_BLOCK_INTERVAL();
+        uint256 length = operatorAddrs.length;
+        uint64[] memory apys = new uint64[](length);
+        for (uint256 i = 0; i < length; i++) {
+            uint256 total = stakeHub.getValidatorTotalPooledBNBRecord(
+                operatorAddrs[i],
+                dayIndex
+            );
+            uint256 reward = stakeHub.getValidatorRewardRecord(
+                operatorAddrs[i],
+                dayIndex
+            );
+            if (total == 0 || reward == 0) {
+                continue;
+            }
+            apys[i] = uint64((reward * 365 * 10000) / total);
+        }
+        return apys;
     }
 }

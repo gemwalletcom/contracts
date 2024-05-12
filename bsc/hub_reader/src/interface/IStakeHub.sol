@@ -15,6 +15,8 @@ struct Commission {
 }
 
 interface IStakeHub {
+    function BREATHE_BLOCK_INTERVAL() external view returns (uint256);
+
     function getValidators(
         uint256 offset,
         uint256 limit
