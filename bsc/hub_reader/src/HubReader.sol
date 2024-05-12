@@ -9,6 +9,7 @@ struct Validator {
     bool jailed;
     string moniker;
     uint64 commission;
+    uint64 apy;
 }
 
 struct Delegation {
@@ -25,7 +26,9 @@ contract HubReader {
     }
 
     /*
-     * @dev Get validators by offset and limit (pagination)
+     * @dev Get validators by offset and limit (pagination), this is an intense function that execution might revert if limit is too large
+     * for some node, the best way to call it is to use a batch JSON RPC calls with proper pagination (e.g. 15 or 20 validators per call)
+
      * @param offset The offset to query validators
      * @param limit The limit to query validators
      *
@@ -55,8 +58,13 @@ contract HubReader {
                 operatorAddress: operatorAddrs[i],
                 moniker: moniker,
                 commission: rate,
-                jailed: jailed
+                jailed: jailed,
+                apy: 0
             });
+        }
+        uint64[] memory apys = this.getAPYs(operatorAddrs, block.timestamp);
+        for (uint256 i = 0; i < validatorCount; i++) {
+            validators[i].apy = apys[i];
         }
         return validators;
     }
@@ -123,11 +131,14 @@ contract HubReader {
                 operatorAddrs[i],
                 dayIndex
             );
+            if (total == 0) {
+                continue;
+            }
             uint256 reward = stakeHub.getValidatorRewardRecord(
                 operatorAddrs[i],
                 dayIndex
             );
-            if (total == 0 || reward == 0) {
+            if (reward == 0) {
                 continue;
             }
             apys[i] = uint64((reward * 365 * 10000) / total);
