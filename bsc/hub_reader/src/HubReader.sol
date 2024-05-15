@@ -16,6 +16,7 @@ struct Delegation {
     address delegatorAddress;
     address validatorAddress;
     uint256 amount;
+    uint256 shares;
 }
 
 contract HubReader {
@@ -93,12 +94,14 @@ contract HubReader {
 
         for (uint256 i = 0; i < validatorCount; i++) {
             IStakeCredit creditContract = IStakeCredit(creditAddrs[i]);
-            uint256 amount = creditContract.getPooledBNB(delegator);
+            uint256 shares = creditContract.balanceOf(delegator);
+            uint256 amount = creditContract.getPooledBNBByShares(shares);
 
             if (amount > 0) {
                 delegations[delegationCount] = Delegation({
                     delegatorAddress: delegator,
                     validatorAddress: operatorAddrs[i],
+                    shares: shares,
                     amount: amount
                 });
                 delegationCount++;

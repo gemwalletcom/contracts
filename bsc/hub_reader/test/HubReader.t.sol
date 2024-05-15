@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {HubReader, Validator, Delegation} from "../src/HubReader.sol";
 
 contract ValidatorsTest is Test {
@@ -35,13 +35,15 @@ contract ValidatorsTest is Test {
             0,
             30
         );
-        assertEq(delegations.length, 1);
-        assertEq(delegations[0].delegatorAddress, delegator);
+        uint256 length = 2;
+        assertEq(delegations.length, length);
+        assertEq(delegations[length - 1].delegatorAddress, delegator);
         assertEq(
-            delegations[0].validatorAddress,
+            delegations[length - 1].validatorAddress,
             0x343dA7Ff0446247ca47AA41e2A25c5Bbb230ED0A
         );
-        assertTrue(delegations[0].amount > 0);
+        assertTrue(delegations[length - 1].amount > 0);
+        assertTrue(delegations[length - 1].shares > 0);
     }
 
     function test_getAPY() public view {

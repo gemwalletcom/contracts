@@ -2,5 +2,9 @@
 pragma solidity ^0.8.13;
 
 interface IStakeCredit {
-    function getPooledBNB(address account) external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+
+    function getPooledBNBByShares(
+        uint256 shares
+    ) external view returns (uint256);
 }
