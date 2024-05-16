@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {HubReader, Validator, Delegation} from "../src/HubReader.sol";
+import {HubReader, Validator, Delegation, Undelegation} from "../src/HubReader.sol";
 
 contract ValidatorsTest is Test {
     HubReader public reader;
@@ -33,7 +33,7 @@ contract ValidatorsTest is Test {
         Delegation[] memory delegations = reader.getDelegations(
             delegator,
             0,
-            30
+            10
         );
         uint256 length = 2;
         assertEq(delegations.length, length);
@@ -44,6 +44,25 @@ contract ValidatorsTest is Test {
         );
         assertTrue(delegations[length - 1].amount > 0);
         assertTrue(delegations[length - 1].shares > 0);
+    }
+
+    function test_getUndelegations() public view {
+        address delegator = 0xee448667ffc3D15ca023A6deEf2D0fAf084C0716;
+        Undelegation[] memory undelegations = reader.getUndelegations(
+            delegator,
+            0,
+            10
+        );
+        uint256 length = 1;
+        assertEq(undelegations.length, length);
+        assertEq(undelegations[length - 1].delegatorAddress, delegator);
+        assertEq(
+            undelegations[length - 1].validatorAddress,
+            0x343dA7Ff0446247ca47AA41e2A25c5Bbb230ED0A
+        );
+        assertTrue(undelegations[length - 1].amount > 0);
+        assertTrue(undelegations[length - 1].shares > 0);
+        assertTrue(undelegations[length - 1].unlockTime > 0);
     }
 
     function test_getAPY() public view {

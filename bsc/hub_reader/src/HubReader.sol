@@ -19,6 +19,14 @@ struct Delegation {
     uint256 shares;
 }
 
+struct Undelegation {
+    address delegatorAddress;
+    address validatorAddress;
+    uint256 amount;
+    uint256 shares;
+    uint256 unlockTime;
+}
+
 contract HubReader {
     IStakeHub public stakeHub;
 
@@ -113,6 +121,59 @@ contract HubReader {
             mstore(delegations, delegationCount)
         }
         return delegations;
+    }
+
+    /**
+     * @dev Get undelegations of a delegator
+     * @param delegator The address of the delegator
+     * @param offset The offset to query validators
+     * @param limit The limit to query validators
+     *
+     * @return The undelegations of the delegator
+     */
+    function getUndelegations(
+        address delegator,
+        uint16 offset,
+        uint16 limit
+    ) external view returns (Undelegation[] memory) {
+        (
+            address[] memory operatorAddrs,
+            address[] memory creditAddrs,
+            uint256 totalLength
+        ) = stakeHub.getValidators(offset, limit);
+        uint256 validatorCount = totalLength < limit ? totalLength : limit;
+
+        // first loop to get the number of unbond requests
+        uint256 undelegationCount = 0;
+        for (uint256 i = 0; i < validatorCount; i++) {
+            undelegationCount += IStakeCredit(creditAddrs[i])
+                .pendingUnbondRequest(delegator);
+        }
+
+        Undelegation[] memory undelegations = new Undelegation[](
+            undelegationCount
+        );
+
+        // resuse same local variable
+        undelegationCount = 0;
+        for (uint256 i = 0; i < validatorCount; i++) {
+            uint256 unbondCount = IStakeCredit(creditAddrs[i])
+                .pendingUnbondRequest(delegator);
+            for (uint256 j = 0; j < unbondCount; j++) {
+                IStakeCredit.UnbondRequest memory req = IStakeCredit(
+                    creditAddrs[i]
+                ).unbondRequest(delegator, j);
+                undelegations[undelegationCount] = Undelegation({
+                    delegatorAddress: delegator,
+                    validatorAddress: operatorAddrs[i],
+                    shares: req.shares,
+                    amount: req.bnbAmount,
+                    unlockTime: req.unlockTime
+                });
+                undelegationCount++;
+            }
+        }
+        return undelegations;
     }
 
     /*
