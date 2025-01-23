@@ -6,6 +6,7 @@ libs = ["lib"]
 remappings = [
     '@layerzerolabs/lz-evm-protocol-v2/=lib/layerzero-v2/packages/layerzero-v2/evm/protocol',
     '@layerzerolabs/lz-evm-oapp-v2/=lib/layerzero-v2/packages/layerzero-v2/evm/oapp',
+    '@stargatefinance/stg-evm-v2/=lib/stargate-v2/packages/stg-evm-v2/',
 ]
 
 [rpc_endpoints]
