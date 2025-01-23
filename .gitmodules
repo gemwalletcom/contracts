@@ -10,3 +10,6 @@
 [submodule "stargate/lib/layerzero-v2"]
 	path = stargate/lib/layerzero-v2
 	url = https://github.com/LayerZero-Labs/layerzero-v2
+[submodule "stargate/lib/stargate-v2"]
+	path = stargate/lib/stargate-v2
+	url = https://github.com/stargate-protocol/stargate-v2
