@@ -2,12 +2,11 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import "../src/GemStargateFeeReceiver.sol";
+import "../src/GemStargateMulticallHandler.sol";
 
-contract GemStargateFeeReceiverScript is Script {
+contract GemStargateDeployerScript is Script {
     struct NetworkConfig {
         address endpoint;
-        address[] stargateAddresses;
     }
 
     mapping(uint256 => string) private chainToNetworkName;
@@ -30,22 +29,11 @@ contract GemStargateFeeReceiverScript is Script {
 
         // Construct environment variable names
         string memory endpointVar = string.concat("ENDPOINT_", networkName);
-        string memory stargateVar = string.concat(
-            "STARGATE_ADDRESSES_",
-            networkName
-        );
 
         // Get values from environment
         address endpoint = vm.envAddress(endpointVar);
-        string memory stargateJson = vm.envString(stargateVar);
 
-        // Parse JSON array of addresses
-        address[] memory stargateAddresses = abi.decode(
-            vm.parseJson(stargateJson),
-            (address[])
-        );
-
-        return NetworkConfig(endpoint, stargateAddresses);
+        return NetworkConfig(endpoint);
     }
 
     function run() public {
@@ -57,28 +45,19 @@ contract GemStargateFeeReceiverScript is Script {
         );
 
         NetworkConfig memory config = getNetworkConfig(chainId);
-        require(
-            config.stargateAddresses.length > 0,
-            "No Stargate addresses configured"
-        );
 
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        for (uint256 i = 0; i < config.stargateAddresses.length; i++) {
-            address stargate = config.stargateAddresses[i];
-            console.log("stargate: %s", stargate);
-            console.log("endpoint: %s", config.endpoint);
-            GemStargateFeeReceiver receiver = new GemStargateFeeReceiver(
-                config.endpoint,
-                stargate
-            );
-            console.log(
-                "Deployed GemStargateFeeReceiver for Stargate %s at %s",
-                stargate,
-                address(receiver)
-            );
-        }
+        GemStargateMulticallHandler handler = new GemStargateMulticallHandler(
+            config.endpoint
+        );
+
+        console.log(
+            "Deployed GemStargateMulticallHandler for Stargate %s at %s",
+            config.endpoint,
+            address(handler)
+        );
 
         vm.stopBroadcast();
     }
