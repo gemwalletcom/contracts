@@ -2,7 +2,8 @@
 
 A collection of smart contracts for Gem Wallet.
 
-- [bsc/hub_reader](bsc/hub_reader): A contract that simplify interacting with BSC Staking Hub
+- [src/hub_reader](src/hub_reader): A contract that simplify interacting with BSC Staking Hub
+- [src/stargate](src/stargate): A contract that allow to do onchain calls on destination chain after Stargate Bridge
 
 ## Development
 
