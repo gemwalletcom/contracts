@@ -1,9 +1,0 @@
-{
-  "extends": "@layerzerolabs/typescript-config-next/library.json",
-  "exclude": ["dist", "build", "node_modules"],
-  "compilerOptions": {
-    "outDir": "dist",
-    "strict": true
-  },
-  "include": ["src/**/*"]
-}
