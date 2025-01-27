@@ -1,0 +1,12 @@
+name: Setup environment
+description: Setup dependencies required to build & test the repository
+runs:
+  using: "composite"
+  steps:
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+
+    - uses: pnpm/action-setup@v4
+      name: Install pnpm
+      with:
+        run_install: false

@@ -7,7 +7,7 @@ A collection of smart contracts for Gem Wallet.
 ## Development
 
 1. Install [Foundry](https://book.getfoundry.sh/) and you're good to go.
-2. Configure `.env` file with your `BSC_RPC_URL` and `BSCSCAN_API_KEY`, if you need to deploy the contract, you need to set `PRIVATE_KEY` as well.
+2. Configure `.env` using `.env.example` rpcs (if needed) and etherscan values, if you need to deploy the contract, you need to set `PRIVATE_KEY` as well.
 
 ## Usage
 
@@ -27,6 +27,20 @@ forge test --rpc-url <your_rpc_url>
 
 ```shell
 # deploy hub_reader
-cd bsc/hub_reader
-forge script script/HubReader.s.sol:HubReaderScript --rpc-url "$BSC_RPC_URL" --broadcast --verify -vvvv
+just deploy-hub-reader
 ```
+
+```shell
+# deploy stargate to all supported chains
+just deploy-stargate
+```
+
+```shell
+# deploy stargate to specific chain
+just deploy-stargate optimism
+```
+
+
+
+
+
