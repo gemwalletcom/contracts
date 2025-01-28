@@ -6,7 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import "@openzeppelin/contracts/utils/Address.sol";
 import {ILayerZeroComposer} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroComposer.sol";
 import {OFTComposeMsgCodec} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/libs/OFTComposeMsgCodec.sol";
-import {MulticallHandler} from "../shared/MulticallHandler.sol";
+import {MulticallHandler} from "../library/MulticallHandler.sol";
 
 contract GemStargateMulticallHandler is ILayerZeroComposer, MulticallHandler {
     address public immutable endpoint;

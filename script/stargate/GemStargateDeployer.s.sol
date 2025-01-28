@@ -15,7 +15,7 @@ contract GemStargateDeployerScript is Script {
         chainToNetworkName[1] = "ETHEREUM";
         chainToNetworkName[10] = "OPTIMISM";
         chainToNetworkName[8453] = "BASE";
-        chainToNetworkName[56] = "BNB";
+        chainToNetworkName[56] = "BSC";
         chainToNetworkName[42161] = "ARBITRUM";
         chainToNetworkName[137] = "POLYGON";
         chainToNetworkName[43114] = "AVALANCHE";
@@ -27,7 +27,10 @@ contract GemStargateDeployerScript is Script {
         string memory networkName = chainToNetworkName[chainId];
 
         // Construct environment variable names
-        string memory endpointVar = string.concat("ENDPOINT_", networkName);
+        string memory endpointVar = string.concat(
+            "STARGATE_ENDPOINT_",
+            networkName
+        );
 
         // Get values from environment
         address endpoint = vm.envAddress(endpointVar);
