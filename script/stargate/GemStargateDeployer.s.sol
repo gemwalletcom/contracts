@@ -19,6 +19,7 @@ contract GemStargateDeployerScript is Script {
         chainToNetworkName[42161] = "ARBITRUM";
         chainToNetworkName[137] = "POLYGON";
         chainToNetworkName[43114] = "AVALANCHE";
+        chainToNetworkName[2741] = "ABSTRACT";
     }
 
     function getNetworkConfig(

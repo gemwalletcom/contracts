@@ -15,7 +15,8 @@ else
 fi
 
 # List of chains with their network names and chain IDs
-CHAIN_IDS=("1:ethereum" "10:optimism" "8453:base" "56:bsc" "43114:avalanche" "137:polygon" "42161:arbitrum")
+CHAIN_IDS=("1:ethereum" "10:optimism" "8453:base" "56:bsc" "43114:avalanche" "137:polygon" "42161:arbitrum" "2741:abstract")
+ZKSYNC_CHAIN_IDS=("2741")
 
 # Deployment script path
 SCRIPT_PATH="../script/stargate/GemStargateDeployerScript.s.sol"
@@ -27,10 +28,9 @@ TARGET_CHAIN=$1
 PRIVATE_KEY=${PRIVATE_KEY}
 
 if [ -z "$PRIVATE_KEY" ]; then
-        echo "Missing PRIVATE_KEY. Skipping..."
-        continue
+    echo "Missing PRIVATE_KEY. Exiting."
+    exit 1
 fi
-
 
 # Deploy to each chain
 for CHAIN in "${CHAIN_IDS[@]}"; do
@@ -42,7 +42,24 @@ for CHAIN in "${CHAIN_IDS[@]}"; do
         continue
     fi
 
-     # Transform the network name to uppercase
+    # Check if the current chain is a zkSync chain
+    IS_ZKSYNC_CHAIN=0
+    for zk_id in "${ZKSYNC_CHAIN_IDS[@]}"; do
+        if [ "$zk_id" = "$CHAIN_ID" ]; then
+            IS_ZKSYNC_CHAIN=1
+            break
+        fi
+    done
+
+    # Set zkSync flag if needed
+    ZKSYNC_FLAG=""
+    GAS_LIMIT=""
+    if [ $IS_ZKSYNC_CHAIN -eq 1 ]; then
+        ZKSYNC_FLAG="--zksync"
+        GAS_LIMIT="--gas-limit 3000000"
+    fi
+
+    # Transform the network name to uppercase
     NETWORK_NAME=$(echo "$NETWORK_NAME" | tr '[:lower:]' '[:upper:]')
 
     RPC_URL_VAR="${NETWORK_NAME}_RPC_URL"
@@ -57,12 +74,12 @@ for CHAIN in "${CHAIN_IDS[@]}"; do
     echo "Deploying to $NETWORK_NAME (Chain ID: $CHAIN_ID)"
     echo "RPC URL: $RPC_URL"
     echo "Endpoint: $ENDPOINT"
+    echo "IS_ZKSYNC_CHAIN: $IS_ZKSYNC_CHAIN"
 
     if [ -z "$RPC_URL" ]; then
         echo "Missing RPC_URL for $NETWORK_NAME. Skipping..."
         continue
     fi
-
 
     if [ -z "$ENDPOINT" ]; then
         echo "Missing ENDPOINT for $NETWORK_NAME. Skipping..."
@@ -75,11 +92,14 @@ for CHAIN in "${CHAIN_IDS[@]}"; do
     fi
 
     # Run the deployment
-    forge script GemStargateDeployerScript \
+    forge script "$SCRIPT_CONTRACT_NAME" \
         --rpc-url "$RPC_URL" \
         --chain-id "$CHAIN_ID" \
         --etherscan-api-key "$ETHERSCAN_API_KEY" \
-        --broadcast --verify -vvvv
+        --broadcast \
+        --verify \
+        -vvvv \
+        $ZKSYNC_FLAG
     
     echo "Deployment to $NETWORK_NAME completed."
 done
