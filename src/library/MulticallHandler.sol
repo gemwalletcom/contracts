@@ -3,14 +3,15 @@ pragma solidity ^0.8.19;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title MulticallsHandler
+ * @title Multicall Handler
  * @notice A contract that handles multiple calls in a single transaction.
  * @dev Inspired by https://github.com/across-protocol/contracts/blob/master/contracts/handlers/MulticallHandler.sol
  */
-contract MulticallHandler {
+contract MulticallHandler is ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Address for address payable;
 
@@ -21,8 +22,6 @@ contract MulticallHandler {
     }
 
     struct Instructions {
-        // Added to handle
-        address token;
         //  Calls that will be attempted.
         Call[] calls;
         // Where the tokens go if any part of the call fails.
@@ -34,11 +33,7 @@ contract MulticallHandler {
     event CallsFailed(Call[] calls, address indexed fallbackRecipient);
 
     // Emitted when there are leftover tokens that are sent to the fallbackRecipient.
-    event DrainedTokens(
-        address indexed recipient,
-        address indexed token,
-        uint256 indexed amount
-    );
+    event DrainedTokens(address indexed recipient, address indexed token, uint256 indexed amount);
     event DrainedNative(address indexed recipient, uint256 amount);
 
     // Errors
@@ -66,17 +61,12 @@ contract MulticallHandler {
                 revert InvalidCall(i, calls);
             }
 
-            (bool success, ) = call.target.call{value: call.value}(
-                call.callData
-            );
+            (bool success,) = call.target.call{value: call.value}(call.callData);
             if (!success) revert CallReverted(i, calls);
         }
     }
 
-    function _drainRemainingTokens(
-        address token,
-        address payable destination
-    ) internal {
+    function _drainRemainingTokens(address token, address payable destination) internal {
         if (token != address(0)) {
             // ERC20 token.
             uint256 amount = IERC20(token).balanceOf(address(this));
