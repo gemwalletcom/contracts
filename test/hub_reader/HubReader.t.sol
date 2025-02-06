@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {HubReader, Validator, Delegation, Undelegation} from "../src/HubReader.sol";
+import {HubReader, Validator, Delegation, Undelegation} from "../../src/hub_reader/HubReader.sol";
 
 contract ValidatorsTest is Test {
     HubReader public reader;

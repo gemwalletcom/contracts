@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import "../src/HubReader.sol";
+import "../../src/hub_reader/HubReader.sol";
 
 contract HubReaderScript is Script {
     function run() public {

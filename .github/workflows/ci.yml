@@ -1,6 +1,10 @@
-name: test
+name: Build
 
-on: workflow_dispatch
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 env:
   FOUNDRY_PROFILE: ci
@@ -19,13 +23,13 @@ jobs:
         with:
           version: nightly
 
-      - name: Run Forge build
+      - name: Forge build
         run: |
           forge --version
           forge build --sizes
         id: build
 
-      - name: Run Forge tests
-        run: |
-          forge test -vvv --rpc-url ${{ secrets.BSC_RPC_URL }}
-        id: test
+      # - name: Forge tests
+      #   run: |
+      #     forge test -vvv --rpc-url ${{ secrets.BSC_RPC_URL }}
+      #   id: test
