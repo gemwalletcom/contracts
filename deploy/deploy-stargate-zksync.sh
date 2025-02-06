@@ -61,7 +61,7 @@ for CHAIN in "${ZKSYNC_CHAIN_IDS[@]}"; do
     GAS_ESTIMATE=$(cast estimate --rpc-url "$RPC_URL" \
         --private-key "$PRIVATE_KEY" \
         0x0000000000000000000000000000000000000000 \
-        "GemStargateMulticallHandler.constructor(address)" \
+        "StargateFeeReceiver.constructor(address)" \
         "$STARGATE_ENDPOINT")
 
     if [[ -z "$GAS_ESTIMATE" ]] || [[ "$GAS_ESTIMATE" == "infinite" ]]; then

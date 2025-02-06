@@ -51,7 +51,7 @@ contract MulticallHandler is ReentrancyGuard {
      * @param calls The list of calls to execute.
      * @dev Inspired by https://github.com/across-protocol/contracts/blob/master/contracts/handlers/MulticallHandler.sol#L79
      */
-    function attemptCalls(Call[] memory calls) external onlySelf {
+    function attemptCalls(Call[] memory calls) external onlySelf nonReentrant {
         uint256 length = calls.length;
         for (uint256 i = 0; i < length; ++i) {
             Call memory call = calls[i];

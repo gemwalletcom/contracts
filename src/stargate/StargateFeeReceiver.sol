@@ -5,7 +5,7 @@ import {ILayerZeroComposer} from "@layerzerolabs/lz-evm-protocol-v2/contracts/in
 import {OFTComposeMsgCodec} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/libs/OFTComposeMsgCodec.sol";
 import {MulticallHandler} from "../library/MulticallHandler.sol";
 
-contract GemStargateMulticallHandler is ILayerZeroComposer, MulticallHandler {
+contract StargateFeeReceiver is ILayerZeroComposer, MulticallHandler {
     address public immutable endpoint;
 
     constructor(address _endpoint) {
