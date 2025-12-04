@@ -17,40 +17,22 @@ struct Commission {
 interface IStakeHub {
     function BREATHE_BLOCK_INTERVAL() external view returns (uint256);
 
-    function getValidators(
-        uint256 offset,
-        uint256 limit
-    )
+    function getValidators(uint256 offset, uint256 limit)
         external
         view
-        returns (
-            address[] memory operatorAddrs,
-            address[] memory creditAddrs,
-            uint256 totalLength
-        );
+        returns (address[] memory operatorAddrs, address[] memory creditAddrs, uint256 totalLength);
 
-    function getValidatorBasicInfo(
-        address operatorAddress
-    )
+    function getValidatorBasicInfo(address operatorAddress)
         external
         view
         returns (uint256 createdTime, bool jailed, uint256 jailUntil);
 
-    function getValidatorDescription(
-        address operatorAddress
-    ) external view returns (Description memory);
+    function getValidatorDescription(address operatorAddress) external view returns (Description memory);
 
-    function getValidatorCommission(
-        address operatorAddress
-    ) external view returns (Commission memory);
+    function getValidatorCommission(address operatorAddress) external view returns (Commission memory);
 
-    function getValidatorRewardRecord(
-        address operatorAddress,
-        uint256 index
-    ) external view returns (uint256);
+    function getValidatorRewardRecord(address operatorAddress, uint256 index) external view returns (uint256);
 
-    function getValidatorTotalPooledBNBRecord(
-        address operatorAddress,
-        uint256 index
-    ) external view returns (uint256);
+    // forge-lint: disable-next-line(mixed-case-function)
+    function getValidatorTotalPooledBNBRecord(address operatorAddress, uint256 index) external view returns (uint256);
 }

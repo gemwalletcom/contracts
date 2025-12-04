@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.15;
 
 import {Script, console} from "forge-std/Script.sol";
-import {HubReader} from "../../src/hub_reader/HubReader.sol";
+import {StakingLens} from "../../src/monad/StakingLens.sol";
 
-contract HubReaderScript is Script {
+contract StakingLensScript is Script {
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
-        HubReader reader = new HubReader();
-        console.log("HubReader deployed to:", address(reader));
+        StakingLens lens = new StakingLens();
+        console.log("StakingLens deployed to:", address(lens));
         vm.stopBroadcast();
     }
 }

@@ -23,6 +23,11 @@ jobs:
         with:
           version: nightly
 
+      - name: Forge lint
+        run: |
+          forge lint
+        id: lint
+
       - name: Forge build
         run: |
           forge --version

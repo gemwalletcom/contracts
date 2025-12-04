@@ -1,46 +1,27 @@
 # Smart Contracts
 
-A collection of smart contracts for Gem Wallet.
+Gem Wallet deployment helpers and read lenses.
 
-- [src/hub_reader](src/hub_reader): A contract that simplify interacting with BSC Staking Hub
-- [src/stargate](src/stargate): A contract that allow to do onchain calls on destination chain after Stargate Bridge
+- `src/hub_reader`: BSC staking hub reader.
+- `src/stargate`: post-bridge call handler for Stargate V2.
+- `src/monad`: staking lens for Monad (precompile reader).
 
 ## Development
 
-1. Install [Foundry](https://book.getfoundry.sh/) and you're good to go.
-2. Configure `.env` using `.env.example` rpcs (if needed) and etherscan values, if you need to deploy the contract, you need to set `PRIVATE_KEY` as well.
+1) Install [Foundry](https://book.getfoundry.sh/).
+2) Copy `.env.example` to `.env` and fill RPCs (including `MONAD_RPC_URL`), scan keys, and `PRIVATE_KEY` for deploys.
 
-## Usage
+## Common Tasks
 
-### Build
+- Build: `forge build`
+- Lint/format: `forge lint && forge fmt`
+- Test: `forge test` (HubReader tests expect a live BSC RPC; the Monad lens tests are mocked)
 
-```shell
-forge build
-```
+## Deploy
 
-### Test
-
-```shell
-forge test --rpc-url <your_rpc_url>
-```
-
-### Deploy
-
-```shell
-# deploy hub_reader
-just deploy-hub-reader
-```
-
-```shell
-# deploy stargate to all supported chains
-just deploy-stargate
-```
-
-```shell
-# deploy stargate to specific chain
-just deploy-stargate optimism
-```
-
+- Hub Reader (BSC): `just deploy-hub-reader`
+- Stargate fee receiver: `just deploy-stargate optimism` (or another supported chain)
+- Monad staking lens: `just deploy-monad-staking`
 
 
 

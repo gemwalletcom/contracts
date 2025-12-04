@@ -43,32 +43,18 @@ contract HubReader {
      *
      * @return The validators
      */
-    function getValidators(
-        uint16 offset,
-        uint16 limit
-    ) external view returns (Validator[] memory) {
-        (address[] memory operatorAddrs, , uint256 totalLength) = stakeHub
-            .getValidators(offset, limit);
+    function getValidators(uint16 offset, uint16 limit) external view returns (Validator[] memory) {
+        (address[] memory operatorAddrs,, uint256 totalLength) = stakeHub.getValidators(offset, limit);
         uint256 validatorCount = totalLength < limit ? totalLength : limit;
         Validator[] memory validators = new Validator[](validatorCount);
 
         for (uint256 i = 0; i < validatorCount; i++) {
-            (, bool jailed, ) = stakeHub.getValidatorBasicInfo(
-                operatorAddrs[i]
-            );
-            string memory moniker = stakeHub
-                .getValidatorDescription(operatorAddrs[i])
-                .moniker;
-            uint64 rate = stakeHub
-                .getValidatorCommission(operatorAddrs[i])
-                .rate;
+            (, bool jailed,) = stakeHub.getValidatorBasicInfo(operatorAddrs[i]);
+            string memory moniker = stakeHub.getValidatorDescription(operatorAddrs[i]).moniker;
+            uint64 rate = stakeHub.getValidatorCommission(operatorAddrs[i]).rate;
 
             validators[i] = Validator({
-                operatorAddress: operatorAddrs[i],
-                moniker: moniker,
-                commission: rate,
-                jailed: jailed,
-                apy: 0
+                operatorAddress: operatorAddrs[i], moniker: moniker, commission: rate, jailed: jailed, apy: 0
             });
         }
         uint64[] memory apys = this.getAPYs(operatorAddrs, block.timestamp);
@@ -86,16 +72,13 @@ contract HubReader {
      *
      * @return The delegations of the delegator
      */
-    function getDelegations(
-        address delegator,
-        uint16 offset,
-        uint16 limit
-    ) external view returns (Delegation[] memory) {
-        (
-            address[] memory operatorAddrs,
-            address[] memory creditAddrs,
-            uint256 totalLength
-        ) = stakeHub.getValidators(offset, limit);
+    function getDelegations(address delegator, uint16 offset, uint16 limit)
+        external
+        view
+        returns (Delegation[] memory)
+    {
+        (address[] memory operatorAddrs, address[] memory creditAddrs, uint256 totalLength) =
+            stakeHub.getValidators(offset, limit);
         uint256 validatorCount = totalLength < limit ? totalLength : limit;
         uint256 delegationCount = 0;
         Delegation[] memory delegations = new Delegation[](validatorCount);
@@ -107,10 +90,7 @@ contract HubReader {
 
             if (amount > 0) {
                 delegations[delegationCount] = Delegation({
-                    delegatorAddress: delegator,
-                    validatorAddress: operatorAddrs[i],
-                    shares: shares,
-                    amount: amount
+                    delegatorAddress: delegator, validatorAddress: operatorAddrs[i], shares: shares, amount: amount
                 });
                 delegationCount++;
             }
@@ -131,38 +111,29 @@ contract HubReader {
      *
      * @return The undelegations of the delegator
      */
-    function getUndelegations(
-        address delegator,
-        uint16 offset,
-        uint16 limit
-    ) external view returns (Undelegation[] memory) {
-        (
-            address[] memory operatorAddrs,
-            address[] memory creditAddrs,
-            uint256 totalLength
-        ) = stakeHub.getValidators(offset, limit);
+    function getUndelegations(address delegator, uint16 offset, uint16 limit)
+        external
+        view
+        returns (Undelegation[] memory)
+    {
+        (address[] memory operatorAddrs, address[] memory creditAddrs, uint256 totalLength) =
+            stakeHub.getValidators(offset, limit);
         uint256 validatorCount = totalLength < limit ? totalLength : limit;
 
         // first loop to get the number of unbond requests
         uint256 undelegationCount = 0;
         for (uint256 i = 0; i < validatorCount; i++) {
-            undelegationCount += IStakeCredit(creditAddrs[i])
-                .pendingUnbondRequest(delegator);
+            undelegationCount += IStakeCredit(creditAddrs[i]).pendingUnbondRequest(delegator);
         }
 
-        Undelegation[] memory undelegations = new Undelegation[](
-            undelegationCount
-        );
+        Undelegation[] memory undelegations = new Undelegation[](undelegationCount);
 
         // resuse same local variable
         undelegationCount = 0;
         for (uint256 i = 0; i < validatorCount; i++) {
-            uint256 unbondCount = IStakeCredit(creditAddrs[i])
-                .pendingUnbondRequest(delegator);
+            uint256 unbondCount = IStakeCredit(creditAddrs[i]).pendingUnbondRequest(delegator);
             for (uint256 j = 0; j < unbondCount; j++) {
-                IStakeCredit.UnbondRequest memory req = IStakeCredit(
-                    creditAddrs[i]
-                ).unbondRequest(delegator, j);
+                IStakeCredit.UnbondRequest memory req = IStakeCredit(creditAddrs[i]).unbondRequest(delegator, j);
                 undelegations[undelegationCount] = Undelegation({
                     delegatorAddress: delegator,
                     validatorAddress: operatorAddrs[i],
@@ -183,28 +154,22 @@ contract HubReader {
      *
      * @return The APYs of the validator in basis points, e.g. 195 is 1.95%
      */
-    function getAPYs(
-        address[] memory operatorAddrs,
-        uint256 timestamp
-    ) external view returns (uint64[] memory) {
+    // forge-lint: disable-next-line(mixed-case-function)
+    function getAPYs(address[] memory operatorAddrs, uint256 timestamp) external view returns (uint64[] memory) {
         uint256 dayIndex = timestamp / stakeHub.BREATHE_BLOCK_INTERVAL();
         uint256 length = operatorAddrs.length;
         uint64[] memory apys = new uint64[](length);
         for (uint256 i = 0; i < length; i++) {
-            uint256 total = stakeHub.getValidatorTotalPooledBNBRecord(
-                operatorAddrs[i],
-                dayIndex
-            );
+            uint256 total = stakeHub.getValidatorTotalPooledBNBRecord(operatorAddrs[i], dayIndex);
             if (total == 0) {
                 continue;
             }
-            uint256 reward = stakeHub.getValidatorRewardRecord(
-                operatorAddrs[i],
-                dayIndex
-            );
+            uint256 reward = stakeHub.getValidatorRewardRecord(operatorAddrs[i], dayIndex);
             if (reward == 0) {
                 continue;
             }
+            // casting to uint64 is safe because APY basis points from hub totals fit in 64 bits
+            // forge-lint: disable-next-line(unsafe-typecast)
             apys[i] = uint64((reward * 365 * 10000) / total);
         }
         return apys;

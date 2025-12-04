@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import "../../src/stargate/StargateFeeReceiver.sol";
+import {StargateFeeReceiver} from "../../src/stargate/StargateFeeReceiver.sol";
 
 contract GemStargateDeployerScript is Script {
     struct NetworkConfig {
@@ -31,7 +31,7 @@ contract GemStargateDeployerScript is Script {
         // Get values from environment
         address endpoint = vm.envAddress(endpointVar);
 
-        return NetworkConfig(endpoint);
+        return NetworkConfig({endpoint: endpoint});
     }
 
     function run() public {
