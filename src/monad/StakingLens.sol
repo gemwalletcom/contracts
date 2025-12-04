@@ -28,7 +28,7 @@ contract StakingLens {
         AwaitingWithdrawal
     }
 
-    struct DelegationPosition {
+    struct Delegation {
         uint64 validatorId;
         uint8 withdrawId;
         DelegationState state;
@@ -86,8 +86,8 @@ contract StakingLens {
         }
     }
 
-    function getDelegations(address delegator) external returns (DelegationPosition[] memory positions) {
-        positions = new DelegationPosition[](MAX_POSITIONS);
+    function getDelegations(address delegator) external returns (Delegation[] memory positions) {
+        positions = new Delegation[](MAX_POSITIONS);
         uint256 positionCount = 0;
         uint16 validatorCount = 0;
 
@@ -124,7 +124,7 @@ contract StakingLens {
         address delegator,
         uint64 validatorId,
         uint64 currentEpoch,
-        DelegationPosition[] memory positions,
+        Delegation[] memory positions,
         uint256 positionCount
     ) internal returns (uint256 newPositionCount) {
         DelegatorSnapshot memory snap = _readDelegator(delegator, validatorId);
@@ -138,7 +138,7 @@ contract StakingLens {
         }
 
         if (snap.stake > 0 && positionCount < MAX_POSITIONS) {
-            positions[positionCount] = DelegationPosition({
+            positions[positionCount] = Delegation({
                 validatorId: validatorId,
                 withdrawId: lastWithdrawId,
                 state: DelegationState.Active,
@@ -151,7 +151,7 @@ contract StakingLens {
         }
 
         if (snap.pendingStake > 0 && positionCount < MAX_POSITIONS) {
-            positions[positionCount] = DelegationPosition({
+            positions[positionCount] = Delegation({
                 validatorId: validatorId,
                 withdrawId: lastWithdrawId,
                 state: DelegationState.Activating,
@@ -177,7 +177,7 @@ contract StakingLens {
         address delegator,
         uint64 validatorId,
         uint64 currentEpoch,
-        DelegationPosition[] memory positions,
+        Delegation[] memory positions,
         uint256 positionCount
     ) internal returns (uint256 newPositionCount, uint8 lastWithdrawId, bool hasWithdrawals) {
         uint256 count = positionCount;
@@ -188,7 +188,7 @@ contract StakingLens {
                 continue;
             }
 
-            positions[count] = DelegationPosition({
+            positions[count] = Delegation({
                 validatorId: validatorId,
                 withdrawId: withdrawId,
                 state: withdrawEpoch < currentEpoch ? DelegationState.AwaitingWithdrawal : DelegationState.Deactivating,
