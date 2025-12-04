@@ -10,16 +10,10 @@ interface IStakeCredit {
 
     function balanceOf(address account) external view returns (uint256);
 
-    function getPooledBNBByShares(
-        uint256 shares
-    ) external view returns (uint256);
+    // forge-lint: disable-next-line(mixed-case-function)
+    function getPooledBNBByShares(uint256 shares) external view returns (uint256);
 
-    function pendingUnbondRequest(
-        address delegator
-    ) external view returns (uint256);
+    function pendingUnbondRequest(address delegator) external view returns (uint256);
 
-    function unbondRequest(
-        address delegator,
-        uint256 _index
-    ) external view returns (UnbondRequest memory);
+    function unbondRequest(address delegator, uint256 _index) external view returns (UnbondRequest memory);
 }

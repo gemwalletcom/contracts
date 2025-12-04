@@ -2,6 +2,7 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+via_ir = true
 
 [rpc_endpoints]
 ethereum = "${ETHEREUM_RPC_URL}"
@@ -11,6 +12,7 @@ bsc = "${BSC_RPC_URL}"
 avalanche = "${AVALANCHE_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
 arbitrum = "${ARBITRUM_RPC_URL}"
+monad = "${MONAD_RPC_URL}"
 
 [etherscan]
 ethereum = { key = "${ETHEREUM_SCAN_API_KEY}" }

@@ -6,10 +6,10 @@ import {OFTComposeMsgCodec} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/li
 import {MulticallHandler} from "../library/MulticallHandler.sol";
 
 contract StargateFeeReceiver is ILayerZeroComposer, MulticallHandler {
-    address public immutable endpoint;
+    address public immutable ENDPOINT;
 
     constructor(address _endpoint) {
-        endpoint = _endpoint;
+        ENDPOINT = _endpoint;
     }
 
     function lzCompose(
@@ -18,8 +18,12 @@ contract StargateFeeReceiver is ILayerZeroComposer, MulticallHandler {
         bytes calldata _message,
         address, // _executor
         bytes calldata // _extraData
-    ) external payable override {
-        require(msg.sender == endpoint, "!endpoint");
+    )
+        external
+        payable
+        override
+    {
+        require(msg.sender == ENDPOINT, "!endpoint");
 
         // Decode message
         bytes memory composeMsg = OFTComposeMsgCodec.composeMsg(_message);
