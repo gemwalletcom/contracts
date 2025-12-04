@@ -19,7 +19,7 @@ contract StakingLens {
     uint256 public constant MONAD_BLOCKS_PER_YEAR = 78_840_000;
     uint64 public constant APY_BPS_PRECISION = 10_000;
     uint64 public constant MONAD_BOUNDARY_BLOCK_PERIOD = 50_000;
-    uint64 public constant MONAD_EPOCH_SECONDS = MONAD_BOUNDARY_BLOCK_PERIOD * 2 / 5; // 0.4s block time
+    uint64 public constant MONAD_EPOCH_SECONDS = MONAD_BOUNDARY_BLOCK_PERIOD * 2 / 5; // 0.4s blocks
 
     enum DelegationState {
         Active,
@@ -33,8 +33,8 @@ contract StakingLens {
         uint8 withdrawId;
         DelegationState state;
         uint256 amount;
-        uint256 rewards; // unclaimed rewards only for Active entries
-        uint64 withdrawEpoch; // populated for withdrawals
+        uint256 rewards;
+        uint64 withdrawEpoch;
         uint64 completionTimestamp;
     }
 
@@ -46,7 +46,6 @@ contract StakingLens {
 
     struct ValidatorInfo {
         uint64 validatorId;
-        string name;
         uint256 stake;
         uint256 commission;
         uint64 apyBps;
@@ -60,10 +59,6 @@ contract StakingLens {
         uint256 commission;
     }
 
-    /**
-     * @notice Sum staked, pending, and reward balances for a delegator.
-     * @dev Same data the Rust provider assembles for staking_monad::get_monad_staking_balance.
-     */
     function getBalance(address delegator) external returns (uint256 staked, uint256 pending, uint256 rewards) {
         bool isDone;
         uint64 nextValId;
@@ -91,12 +86,6 @@ contract StakingLens {
         }
     }
 
-    /**
-     * @notice Get all delegation positions for a delegator, including withdrawals.
-     * @dev Emits one entry per state (active, activating, withdrawal requests).
-     *      Uses withdrawId as the tie-breaker so clients can build delegation_ids
-     *      compatible with the Rust client (address:withdrawId).
-     */
     function getDelegations(address delegator) external returns (DelegationPosition[] memory positions) {
         positions = new DelegationPosition[](MAX_POSITIONS);
         uint256 positionCount = 0;
@@ -233,10 +222,9 @@ contract StakingLens {
 
     /**
      * @notice Return validator stats plus APY for a set of validator ids.
-     * @param validatorIds If empty, uses the curated Monad validator list.
-     * @param fallbackApyBps Optional fallback APY (basis points) if the network or validator math returns zero.
+     * @param validatorIds If empty, uses the full Monad validator set.
      */
-    function getValidators(uint64[] calldata validatorIds, uint64 fallbackApyBps)
+    function getValidators(uint64[] calldata validatorIds)
         external
         returns (ValidatorInfo[] memory validators, uint64 networkApyBps)
     {
@@ -254,13 +242,9 @@ contract StakingLens {
             }
 
             uint64 validatorApy = _validatorApyBps(snapshot.stake, totalStake, snapshot.commission, networkApyBps);
-            if (validatorApy == 0) {
-                validatorApy = fallbackApyBps;
-            }
 
             validators[i] = ValidatorInfo({
                 validatorId: snapshot.validatorId,
-                name: uint256(snapshot.validatorId).toString(),
                 stake: snapshot.stake,
                 commission: snapshot.commission,
                 apyBps: validatorApy,
@@ -270,12 +254,10 @@ contract StakingLens {
     }
 
     /**
-     * @notice Return APYs for a set of validator ids, mirroring HubReader.getAPYs style.
-     * @param validatorIds If empty, uses the curated Monad validator list.
-     * @param fallbackApyBps Optional fallback APY (basis points) if the network or validator math returns zero.
+     * @notice Return APYs for a set of validator ids. Defaults to the full validator set when empty.
      */
     // forge-lint: disable-next-line(mixed-case-function)
-    function getAPYs(uint64[] calldata validatorIds, uint64 fallbackApyBps) external returns (uint64[] memory apysBps) {
+    function getAPYs(uint64[] calldata validatorIds) external returns (uint64[] memory apysBps) {
         uint64[] memory allValidatorIds = _allValidatorIds();
         uint64[] memory targetIds = validatorIds.length == 0 ? allValidatorIds : validatorIds;
 
@@ -286,12 +268,11 @@ contract StakingLens {
         for (uint256 i = 0; i < targetIds.length; ++i) {
             (ValidatorData memory snapshot, bool found) = _findValidator(data, targetIds[i]);
             if (!found) {
-                apysBps[i] = fallbackApyBps;
                 continue;
             }
 
             uint64 validatorApy = _validatorApyBps(snapshot.stake, totalStake, snapshot.commission, networkApyBps);
-            apysBps[i] = validatorApy > 0 ? validatorApy : fallbackApyBps;
+            apysBps[i] = validatorApy;
         }
     }
 

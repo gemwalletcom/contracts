@@ -9,6 +9,9 @@ build:
 test:
     forge test
 
+test-monad:
+    forge test --match-path test/monad/*
+
 deploy-stargate CHAIN_NAME:
     bash ./deploy/deploy-stargate.sh {{CHAIN_NAME}}
 
