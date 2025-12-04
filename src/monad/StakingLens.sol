@@ -18,6 +18,8 @@ contract StakingLens {
     uint256 public constant MONAD_BLOCK_REWARD = 25 ether;
     uint256 public constant MONAD_BLOCKS_PER_YEAR = 78_840_000;
     uint64 public constant APY_BPS_PRECISION = 10_000;
+    uint64 public constant MONAD_BOUNDARY_BLOCK_PERIOD = 50_000;
+    uint64 public constant MONAD_EPOCH_SECONDS = MONAD_BOUNDARY_BLOCK_PERIOD * 2 / 5; // 0.4s block time
 
     enum DelegationState {
         Active,
@@ -33,6 +35,7 @@ contract StakingLens {
         uint256 amount;
         uint256 rewards; // unclaimed rewards only for Active entries
         uint64 withdrawEpoch; // populated for withdrawals
+        uint64 completionTimestamp;
     }
 
     struct DelegatorSnapshot {
@@ -152,7 +155,8 @@ contract StakingLens {
                 state: DelegationState.Active,
                 amount: snap.stake,
                 rewards: snap.rewards,
-                withdrawEpoch: 0
+                withdrawEpoch: 0,
+                completionTimestamp: 0
             });
             ++positionCount;
         }
@@ -164,7 +168,8 @@ contract StakingLens {
                 state: DelegationState.Activating,
                 amount: snap.pendingStake,
                 rewards: 0,
-                withdrawEpoch: 0
+                withdrawEpoch: 0,
+                completionTimestamp: 0
             });
             ++positionCount;
         }
@@ -200,7 +205,10 @@ contract StakingLens {
                 state: withdrawEpoch < currentEpoch ? DelegationState.AwaitingWithdrawal : DelegationState.Deactivating,
                 amount: amount,
                 rewards: 0,
-                withdrawEpoch: withdrawEpoch
+                withdrawEpoch: withdrawEpoch,
+                completionTimestamp: withdrawEpoch < currentEpoch
+                    ? 0
+                    : _withdrawCompletionTimestamp(withdrawEpoch, currentEpoch)
             });
 
             ++count;
@@ -209,6 +217,18 @@ contract StakingLens {
         }
 
         return (count, lastWithdrawId, hasWithdrawals);
+    }
+
+    function _withdrawCompletionTimestamp(uint64 withdrawEpoch, uint64 currentEpoch) internal view returns (uint64) {
+        if (withdrawEpoch < currentEpoch) {
+            return 0;
+        }
+
+        uint64 remainingEpochs = withdrawEpoch - currentEpoch + 1;
+        uint256 completion = block.timestamp + uint256(remainingEpochs) * uint256(MONAD_EPOCH_SECONDS);
+        // casting to uint64 is safe because completion timestamps are bounded by the type max guard above
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return completion > type(uint64).max ? type(uint64).max : uint64(completion);
     }
 
     /**
