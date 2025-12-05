@@ -13,12 +13,3 @@ avalanche = "${AVALANCHE_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
 arbitrum = "${ARBITRUM_RPC_URL}"
 monad = "${MONAD_RPC_URL}"
-
-[etherscan]
-ethereum = { key = "${ETHEREUM_SCAN_API_KEY}" }
-optimism = { key = "${OPTIMISM_SCAN_API_KEY}" }
-base = { key = "${BASE_SCAN_API_KEY}" }
-bsc = { key = "${BSC_SCAN_API_KEY}" }
-# avalanche = { key = "${AVALANCHE_SCAN_API_KEY}" }  // We don't need api key for verification
-polygon = { key = "${POLYGON_SCAN_API_KEY}" }
-arbitrum = { key = "${ARBITRUM_SCAN_API_KEY}" }
