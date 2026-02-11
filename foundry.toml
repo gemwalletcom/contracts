@@ -4,6 +4,12 @@ out = "out"
 libs = ["lib"]
 via_ir = true
 
+[profile.ci]
+src = "src"
+out = "out"
+libs = ["lib"]
+via_ir = true
+
 [rpc_endpoints]
 ethereum = "${ETHEREUM_RPC_URL}"
 optimism = "${OPTIMISM_RPC_URL}"
