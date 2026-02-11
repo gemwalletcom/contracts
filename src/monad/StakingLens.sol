@@ -90,6 +90,8 @@ contract StakingLens {
         positions = new Delegation[](MAX_POSITIONS);
         uint256 positionCount = 0;
         uint16 validatorCount = 0;
+        uint64[] memory processedValidatorIds = new uint64[](uint256(MAX_DELEGATIONS));
+        uint256 processedValidatorCount = 0;
 
         (uint64 currentEpoch,) = STAKING.getEpoch();
 
@@ -104,7 +106,13 @@ contract StakingLens {
 
             for (uint256 i = 0; i < len && validatorCount < MAX_DELEGATIONS; ++i) {
                 uint64 validatorId = valIds[i];
+                if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
+                    continue;
+                }
+
                 positionCount = _processValidator(delegator, validatorId, currentEpoch, positions, positionCount);
+                processedValidatorIds[processedValidatorCount] = validatorId;
+                ++processedValidatorCount;
                 ++validatorCount;
             }
 
@@ -115,9 +123,39 @@ contract StakingLens {
             (isDone, nextValId, valIds) = STAKING.getDelegations(delegator, nextValId);
         }
 
+        if (validatorCount < MAX_DELEGATIONS && positionCount < MAX_POSITIONS) {
+            uint64[] memory allValidatorIds = _allValidatorIds();
+            uint256 len = allValidatorIds.length;
+            for (uint256 i = 0; i < len && validatorCount < MAX_DELEGATIONS && positionCount < MAX_POSITIONS; ++i) {
+                uint64 validatorId = allValidatorIds[i];
+                if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
+                    continue;
+                }
+
+                positionCount = _processValidator(delegator, validatorId, currentEpoch, positions, positionCount);
+                processedValidatorIds[processedValidatorCount] = validatorId;
+                ++processedValidatorCount;
+                ++validatorCount;
+            }
+        }
+
         assembly {
             mstore(positions, positionCount)
         }
+    }
+
+    function _containsValidator(uint64[] memory validatorIds, uint256 count, uint64 validatorId)
+        internal
+        pure
+        returns (bool)
+    {
+        for (uint256 i = 0; i < count; ++i) {
+            if (validatorIds[i] == validatorId) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     function _processValidator(
@@ -133,11 +171,11 @@ contract StakingLens {
         (positionCount, lastWithdrawId, hasWithdrawals) =
             _appendWithdrawals(delegator, validatorId, currentEpoch, positions, positionCount);
 
-        if (snap.stake == 0 && snap.pendingStake == 0 && !hasWithdrawals) {
+        if (snap.stake == 0 && snap.pendingStake == 0 && snap.rewards == 0 && !hasWithdrawals) {
             return positionCount;
         }
 
-        if (snap.stake > 0 && positionCount < MAX_POSITIONS) {
+        if ((snap.stake > 0 || snap.rewards > 0) && positionCount < MAX_POSITIONS) {
             positions[positionCount] = Delegation({
                 validatorId: validatorId,
                 withdrawId: lastWithdrawId,

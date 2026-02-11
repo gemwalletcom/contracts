@@ -28,26 +28,22 @@ read-staking-lens-address BROADCAST_FILE="broadcast/StakingLens.s.sol/143/run-la
     #!/usr/bin/env bash
     jq -r '.receipts[]?.contractAddress // empty' "{{BROADCAST_FILE}}"
 
-verify-monad-staking ADDRESS="": build-monad
-    ADDRESS_TO_VERIFY=${STAKING_LENS_ADDRESS:-${ADDRESS-}}
-    [ -n "${ADDRESS_TO_VERIFY-}" ] || { echo "Set STAKING_LENS_ADDRESS (hint: STAKING_LENS_ADDRESS=$(just read-staking-lens-address))" >&2; exit 1; }
+verify-monad-staking ADDRESS: build-monad
     forge verify-contract \
         --rpc-url https://rpc.monad.xyz \
         --verifier sourcify \
         --verifier-url 'https://sourcify-api-monad.blockvision.org/' \
         --chain-id 143 \
-        "$ADDRESS_TO_VERIFY" \
+        "{{ADDRESS}}" \
         src/monad/StakingLens.sol:StakingLens
 
-verify-monad-staking-etherscan ADDRESS="": build-monad
-    ADDRESS_TO_VERIFY=${STAKING_LENS_ADDRESS:-${ADDRESS-}}
-    [ -n "${ADDRESS_TO_VERIFY-}" ] || { echo "Set STAKING_LENS_ADDRESS (hint: STAKING_LENS_ADDRESS=$(just read-staking-lens-address))" >&2; exit 1; }
+verify-monad-staking-etherscan ADDRESS: build-monad
     [ -n "${ETHERSCAN_API_KEY-}" ] || { echo "ETHERSCAN_API_KEY is required" >&2; exit 1; }
     forge verify-contract \
-        --verifier etherscan \
+        --verifier custom \
         --verifier-url 'https://api.etherscan.io/v2/api?chainid=143' \
+        --verifier-api-key "$ETHERSCAN_API_KEY" \
         --chain 143 \
         --rpc-url https://rpc.monad.xyz \
-        --etherscan-api-key "$ETHERSCAN_API_KEY" \
-        "$ADDRESS_TO_VERIFY" \
+        "{{ADDRESS}}" \
         src/monad/StakingLens.sol:StakingLens
