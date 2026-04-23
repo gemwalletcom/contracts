@@ -26,5 +26,5 @@ Gem Wallet deployment helpers and read lenses.
 ## Deployments
 
 - Hub Reader (BSC): [0x830295c0abe7358f7e24bc38408095621474280b](https://bscscan.com/address/0x830295c0abe7358f7e24bc38408095621474280b)
-- Monad Staking Lens: [0x1c5C7645daB3A1642048AF96FACE6be29952CbF9](https://monadvision.com/address/0x1c5C7645daB3A1642048AF96FACE6be29952CbF9?tab=Contract)
+- Monad Staking Lens: [0xe754Ad5e300c81B02dC6583E1612025507ef90F7](https://monadvision.com/address/0xe754Ad5e300c81B02dC6583E1612025507ef90F7?tab=Contract)
 
