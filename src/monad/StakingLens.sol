@@ -11,8 +11,18 @@ contract StakingLens {
 
     uint16 public constant MAX_DELEGATIONS = 128;
     uint8 public constant MAX_WITHDRAW_IDS = 8;
+    uint16 public constant FULL_SCAN_WITHDRAW_IDS = 256;
+    uint8 public constant MAX_FULL_SCAN_VALIDATORS = 8;
+    uint8 public constant MAX_FALLBACK_SCAN_VALIDATORS = 32;
     uint32 public constant ACTIVE_VALIDATOR_SET = 200;
-    uint256 public constant MAX_POSITIONS = uint256(MAX_DELEGATIONS) * (2 + MAX_WITHDRAW_IDS);
+    uint256 public constant MAX_POSITIONS = uint256(MAX_DELEGATIONS) * 2 + uint256(MAX_FULL_SCAN_VALIDATORS)
+        * uint256(FULL_SCAN_WITHDRAW_IDS) + (uint256(MAX_DELEGATIONS) - uint256(MAX_FULL_SCAN_VALIDATORS))
+        * uint256(MAX_WITHDRAW_IDS);
+    uint8 internal constant CURATED_VALIDATOR_COUNT = 4;
+    uint64 internal constant MONADVISION_VALIDATOR_ID = 16;
+    uint64 internal constant ALCHEMY_VALIDATOR_ID = 5;
+    uint64 internal constant STAKIN_VALIDATOR_ID = 10;
+    uint64 internal constant EVERSTAKE_VALIDATOR_ID = 9;
 
     uint256 public constant MONAD_SCALE = 1e18;
     uint256 public constant MONAD_BLOCK_REWARD = 25 ether;
@@ -60,40 +70,142 @@ contract StakingLens {
     }
 
     function getBalance(address delegator) external returns (uint256 staked, uint256 pending, uint256 rewards) {
-        bool isDone;
-        uint64 nextValId;
-        uint64[] memory valIds;
+        (uint64[] memory activeValidatorIds, uint256 activeValidatorCount) = _collectActiveValidatorIds(delegator);
 
-        (isDone, nextValId, valIds) = STAKING.getDelegations(delegator, 0);
+        uint16 validatorCount = 0;
+        uint64[] memory processedValidatorIds = new uint64[](uint256(MAX_DELEGATIONS));
+        uint256 processedValidatorCount = 0;
 
-        while (true) {
-            uint256 len = valIds.length;
+        // Balance has no withdrawal scan tier, so active stake wins over curated discovery if the cap is ever hit.
+        for (uint256 i = 0; i < activeValidatorCount && validatorCount < MAX_DELEGATIONS; ++i) {
+            uint64 validatorId = activeValidatorIds[i];
+            (staked, pending, rewards) = _addDelegatorBalance(delegator, validatorId, staked, pending, rewards);
+            processedValidatorIds[processedValidatorCount] = validatorId;
+            ++processedValidatorCount;
+            ++validatorCount;
+        }
 
-            for (uint256 i = 0; i < len; ++i) {
-                (uint256 stake,, uint256 unclaimedRewards, uint256 deltaStake, uint256 nextDeltaStake,,) =
-                    STAKING.getDelegator(valIds[i], delegator);
+        if (validatorCount < MAX_DELEGATIONS) {
+            uint64[CURATED_VALIDATOR_COUNT] memory curatedValidatorIds = _curatedValidatorIds();
+            for (uint256 i = 0; i < CURATED_VALIDATOR_COUNT && validatorCount < MAX_DELEGATIONS; ++i) {
+                uint64 validatorId = curatedValidatorIds[i];
+                if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
+                    continue;
+                }
 
-                staked += stake;
-                pending += deltaStake + nextDeltaStake;
-                rewards += unclaimedRewards;
+                (staked, pending, rewards) = _addDelegatorBalance(delegator, validatorId, staked, pending, rewards);
+                processedValidatorIds[processedValidatorCount] = validatorId;
+                ++processedValidatorCount;
+                ++validatorCount;
             }
+        }
 
-            if (isDone) {
-                break;
+        if (validatorCount < MAX_DELEGATIONS) {
+            uint64[] memory allValidatorIds = _allValidatorIds();
+            uint256 len = allValidatorIds.length;
+            uint16 fallbackValidatorCount = 0;
+            for (
+                uint256 i = 0;
+                i < len && validatorCount < MAX_DELEGATIONS && fallbackValidatorCount < MAX_FALLBACK_SCAN_VALIDATORS;
+                ++i
+            ) {
+                uint64 validatorId = allValidatorIds[i];
+                if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
+                    continue;
+                }
+
+                (staked, pending, rewards) = _addDelegatorBalance(delegator, validatorId, staked, pending, rewards);
+                processedValidatorIds[processedValidatorCount] = validatorId;
+                ++processedValidatorCount;
+                ++validatorCount;
+                ++fallbackValidatorCount;
             }
-
-            (isDone, nextValId, valIds) = STAKING.getDelegations(delegator, nextValId);
         }
     }
 
     function getDelegations(address delegator) external returns (Delegation[] memory positions) {
-        positions = new Delegation[](MAX_POSITIONS);
+        (uint64[] memory activeValidatorIds, uint256 activeValidatorCount) = _collectActiveValidatorIds(delegator);
+        (uint64[] memory prioritizedValidatorIds, uint256 prioritizedValidatorCount) =
+            _buildPrioritizedValidatorIds(activeValidatorIds, activeValidatorCount);
+        uint256 fullScanValidatorCount = _fullScanValidatorCount(prioritizedValidatorCount);
+
+        positions = new Delegation[](_maxPositions(prioritizedValidatorCount, fullScanValidatorCount));
         uint256 positionCount = 0;
         uint16 validatorCount = 0;
         uint64[] memory processedValidatorIds = new uint64[](uint256(MAX_DELEGATIONS));
         uint256 processedValidatorCount = 0;
 
         (uint64 currentEpoch,) = STAKING.getEpoch();
+
+        for (
+            uint256 i = 0;
+            i < fullScanValidatorCount && validatorCount < MAX_DELEGATIONS && positionCount < positions.length;
+            ++i
+        ) {
+            uint64 validatorId = prioritizedValidatorIds[i];
+            if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
+                continue;
+            }
+
+            positionCount = _processValidator(
+                delegator, validatorId, currentEpoch, positions, positionCount, FULL_SCAN_WITHDRAW_IDS
+            );
+            processedValidatorIds[processedValidatorCount] = validatorId;
+            ++processedValidatorCount;
+            ++validatorCount;
+        }
+
+        for (
+            uint256 i = fullScanValidatorCount;
+            i < prioritizedValidatorCount && validatorCount < MAX_DELEGATIONS && positionCount < positions.length;
+            ++i
+        ) {
+            uint64 validatorId = prioritizedValidatorIds[i];
+            if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
+                continue;
+            }
+
+            positionCount =
+                _processValidator(delegator, validatorId, currentEpoch, positions, positionCount, MAX_WITHDRAW_IDS);
+            processedValidatorIds[processedValidatorCount] = validatorId;
+            ++processedValidatorCount;
+            ++validatorCount;
+        }
+
+        if (validatorCount < MAX_DELEGATIONS && positionCount < positions.length) {
+            uint64[] memory allValidatorIds = _allValidatorIds();
+            uint256 len = allValidatorIds.length;
+            uint16 fallbackValidatorCount = 0;
+            for (
+                uint256 i = 0;
+                i < len && validatorCount < MAX_DELEGATIONS && positionCount < positions.length
+                    && fallbackValidatorCount < MAX_FALLBACK_SCAN_VALIDATORS;
+                ++i
+            ) {
+                uint64 validatorId = allValidatorIds[i];
+                if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
+                    continue;
+                }
+
+                positionCount =
+                    _processValidator(delegator, validatorId, currentEpoch, positions, positionCount, MAX_WITHDRAW_IDS);
+                processedValidatorIds[processedValidatorCount] = validatorId;
+                ++processedValidatorCount;
+                ++validatorCount;
+                ++fallbackValidatorCount;
+            }
+        }
+
+        assembly {
+            mstore(positions, positionCount)
+        }
+    }
+
+    function _collectActiveValidatorIds(address delegator)
+        internal
+        returns (uint64[] memory validatorIds, uint256 validatorCount)
+    {
+        validatorIds = new uint64[](uint256(MAX_DELEGATIONS));
 
         bool isDone;
         uint64 nextValId;
@@ -105,43 +217,83 @@ contract StakingLens {
             uint256 len = valIds.length;
 
             for (uint256 i = 0; i < len && validatorCount < MAX_DELEGATIONS; ++i) {
-                uint64 validatorId = valIds[i];
-                if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
-                    continue;
-                }
-
-                positionCount = _processValidator(delegator, validatorId, currentEpoch, positions, positionCount);
-                processedValidatorIds[processedValidatorCount] = validatorId;
-                ++processedValidatorCount;
-                ++validatorCount;
+                validatorCount = _appendUniqueValidatorId(validatorIds, validatorCount, valIds[i]);
             }
 
-            if (isDone || validatorCount == MAX_DELEGATIONS || positionCount == MAX_POSITIONS) {
+            if (isDone || validatorCount == MAX_DELEGATIONS) {
                 break;
             }
 
             (isDone, nextValId, valIds) = STAKING.getDelegations(delegator, nextValId);
         }
+    }
 
-        if (validatorCount < MAX_DELEGATIONS && positionCount < MAX_POSITIONS) {
-            uint64[] memory allValidatorIds = _allValidatorIds();
-            uint256 len = allValidatorIds.length;
-            for (uint256 i = 0; i < len && validatorCount < MAX_DELEGATIONS && positionCount < MAX_POSITIONS; ++i) {
-                uint64 validatorId = allValidatorIds[i];
-                if (_containsValidator(processedValidatorIds, processedValidatorCount, validatorId)) {
-                    continue;
-                }
+    function _buildPrioritizedValidatorIds(uint64[] memory activeValidatorIds, uint256 activeValidatorCount)
+        internal
+        pure
+        returns (uint64[] memory validatorIds, uint256 validatorCount)
+    {
+        validatorIds = new uint64[](activeValidatorCount + CURATED_VALIDATOR_COUNT);
 
-                positionCount = _processValidator(delegator, validatorId, currentEpoch, positions, positionCount);
-                processedValidatorIds[processedValidatorCount] = validatorId;
-                ++processedValidatorCount;
-                ++validatorCount;
-            }
+        uint64[CURATED_VALIDATOR_COUNT] memory curatedValidatorIds = _curatedValidatorIds();
+        for (uint256 i = 0; i < CURATED_VALIDATOR_COUNT; ++i) {
+            validatorCount = _appendUniqueValidatorId(validatorIds, validatorCount, curatedValidatorIds[i]);
         }
 
-        assembly {
-            mstore(positions, positionCount)
+        for (uint256 i = 0; i < activeValidatorCount; ++i) {
+            validatorCount = _appendUniqueValidatorId(validatorIds, validatorCount, activeValidatorIds[i]);
         }
+    }
+
+    function _curatedValidatorIds() internal pure returns (uint64[CURATED_VALIDATOR_COUNT] memory validatorIds) {
+        validatorIds[0] = MONADVISION_VALIDATOR_ID;
+        validatorIds[1] = ALCHEMY_VALIDATOR_ID;
+        validatorIds[2] = STAKIN_VALIDATOR_ID;
+        validatorIds[3] = EVERSTAKE_VALIDATOR_ID;
+    }
+
+    function _fullScanValidatorCount(uint256 prioritizedValidatorCount) internal pure returns (uint256) {
+        if (prioritizedValidatorCount < MAX_FULL_SCAN_VALIDATORS) {
+            return prioritizedValidatorCount;
+        }
+
+        return MAX_FULL_SCAN_VALIDATORS;
+    }
+
+    function _maxPositions(uint256 prioritizedValidatorCount, uint256 fullScanValidatorCount)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 cappedPrioritizedValidatorCount =
+            prioritizedValidatorCount > MAX_DELEGATIONS ? MAX_DELEGATIONS : prioritizedValidatorCount;
+        uint256 cappedFullScanValidatorCount = fullScanValidatorCount > cappedPrioritizedValidatorCount
+            ? cappedPrioritizedValidatorCount
+            : fullScanValidatorCount;
+        uint256 fallbackValidatorCount = uint256(MAX_DELEGATIONS) - cappedPrioritizedValidatorCount;
+        if (fallbackValidatorCount > MAX_FALLBACK_SCAN_VALIDATORS) {
+            fallbackValidatorCount = MAX_FALLBACK_SCAN_VALIDATORS;
+        }
+        uint256 shallowScanValidatorCount =
+            cappedPrioritizedValidatorCount - cappedFullScanValidatorCount + fallbackValidatorCount;
+        uint256 totalValidatorCount = cappedPrioritizedValidatorCount + fallbackValidatorCount;
+
+        // Two non-withdrawal slots per validator (Active, Activating), plus withdrawal slots per scan tier.
+        return totalValidatorCount * 2 + cappedFullScanValidatorCount * FULL_SCAN_WITHDRAW_IDS
+            + shallowScanValidatorCount * MAX_WITHDRAW_IDS;
+    }
+
+    function _appendUniqueValidatorId(uint64[] memory validatorIds, uint256 count, uint64 validatorId)
+        internal
+        pure
+        returns (uint256 newCount)
+    {
+        if (_containsValidator(validatorIds, count, validatorId)) {
+            return count;
+        }
+
+        validatorIds[count] = validatorId;
+        return count + 1;
     }
 
     function _containsValidator(uint64[] memory validatorIds, uint256 count, uint64 validatorId)
@@ -163,19 +315,20 @@ contract StakingLens {
         uint64 validatorId,
         uint64 currentEpoch,
         Delegation[] memory positions,
-        uint256 positionCount
+        uint256 positionCount,
+        uint16 maxWithdrawIds
     ) internal returns (uint256 newPositionCount) {
         DelegatorSnapshot memory snap = _readDelegator(delegator, validatorId);
         uint8 lastWithdrawId;
         bool hasWithdrawals;
         (positionCount, lastWithdrawId, hasWithdrawals) =
-            _appendWithdrawals(delegator, validatorId, currentEpoch, positions, positionCount);
+            _appendWithdrawals(delegator, validatorId, currentEpoch, positions, positionCount, maxWithdrawIds);
 
         if (snap.stake == 0 && snap.pendingStake == 0 && snap.rewards == 0 && !hasWithdrawals) {
             return positionCount;
         }
 
-        if ((snap.stake > 0 || snap.rewards > 0) && positionCount < MAX_POSITIONS) {
+        if ((snap.stake > 0 || snap.rewards > 0) && positionCount < positions.length) {
             positions[positionCount] = Delegation({
                 validatorId: validatorId,
                 withdrawId: lastWithdrawId,
@@ -188,7 +341,7 @@ contract StakingLens {
             ++positionCount;
         }
 
-        if (snap.pendingStake > 0 && positionCount < MAX_POSITIONS) {
+        if (snap.pendingStake > 0 && positionCount < positions.length) {
             positions[positionCount] = Delegation({
                 validatorId: validatorId,
                 withdrawId: lastWithdrawId,
@@ -211,24 +364,41 @@ contract StakingLens {
         snap.pendingStake = deltaStake + nextDeltaStake;
     }
 
+    function _addDelegatorBalance(
+        address delegator,
+        uint64 validatorId,
+        uint256 currentStaked,
+        uint256 currentPending,
+        uint256 currentRewards
+    ) internal returns (uint256 staked, uint256 pending, uint256 rewards) {
+        DelegatorSnapshot memory snap = _readDelegator(delegator, validatorId);
+        return (currentStaked + snap.stake, currentPending + snap.pendingStake, currentRewards + snap.rewards);
+    }
+
     function _appendWithdrawals(
         address delegator,
         uint64 validatorId,
         uint64 currentEpoch,
         Delegation[] memory positions,
-        uint256 positionCount
+        uint256 positionCount,
+        uint16 maxWithdrawIds
     ) internal returns (uint256 newPositionCount, uint8 lastWithdrawId, bool hasWithdrawals) {
+        assert(maxWithdrawIds <= uint16(type(uint8).max) + 1);
         uint256 count = positionCount;
 
-        for (uint8 withdrawId = 0; withdrawId < MAX_WITHDRAW_IDS && count < MAX_POSITIONS; ++withdrawId) {
-            (uint256 amount,, uint64 withdrawEpoch) = STAKING.getWithdrawalRequest(validatorId, delegator, withdrawId);
+        for (uint16 withdrawId = 0; withdrawId < maxWithdrawIds && count < positions.length; ++withdrawId) {
+            // The maxWithdrawIds assertion keeps withdrawId within the uint8 request-id range.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint8 requestWithdrawId = uint8(withdrawId);
+            (uint256 amount,, uint64 withdrawEpoch) =
+                STAKING.getWithdrawalRequest(validatorId, delegator, requestWithdrawId);
             if (amount == 0) {
                 continue;
             }
 
             positions[count] = Delegation({
                 validatorId: validatorId,
-                withdrawId: withdrawId,
+                withdrawId: requestWithdrawId,
                 state: withdrawEpoch < currentEpoch ? DelegationState.AwaitingWithdrawal : DelegationState.Deactivating,
                 amount: amount,
                 rewards: 0,
@@ -239,7 +409,7 @@ contract StakingLens {
             });
 
             ++count;
-            lastWithdrawId = withdrawId;
+            lastWithdrawId = requestWithdrawId;
             hasWithdrawals = true;
         }
 
