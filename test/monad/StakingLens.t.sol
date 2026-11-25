@@ -8,6 +8,10 @@ import {IStaking} from "../../src/monad/IStaking.sol";
 contract StakingLensTest is Test {
     StakingLens private lens;
     address private constant STAKING_PRECOMPILE = address(0x0000000000000000000000000000000000001000);
+    uint64 private constant MONADVISION_VALIDATOR_ID = 16;
+    uint64 private constant ALCHEMY_VALIDATOR_ID = 5;
+    uint64 private constant STAKIN_VALIDATOR_ID = 10;
+    uint64 private constant EVERSTAKE_VALIDATOR_ID = 9;
 
     uint64[] private validatorIds;
     uint256 private constant TOTAL_STAKE = 1e30;
@@ -46,6 +50,57 @@ contract StakingLensTest is Test {
         assertEq(validators[1].apyBps, expected);
     }
 
+    function test_validatorSubsetsKeepRequestOrderAndMissingIds() public {
+        uint64[] memory ids = new uint64[](4);
+        ids[0] = 2;
+        ids[1] = 777;
+        ids[2] = 1;
+        ids[3] = 2;
+        (StakingLens.ValidatorInfo[] memory all, uint64 networkApy) = lens.getValidators(new uint64[](0));
+        (StakingLens.ValidatorInfo[] memory subset,) = lens.getValidators(ids);
+        uint64[] memory apys = lens.getAPYs(ids);
+        for (uint256 i = 0; i < ids.length; ++i) {
+            assertEq(subset[i].validatorId, ids[i]);
+            if (i != 1) {
+                assertEq(subset[i].apyBps, apys[i]);
+                assertEq(abi.encode(subset[i]), abi.encode(all[ids[i] - 1]));
+            }
+        }
+        assertEq(subset[1].apyBps, networkApy);
+        assertEq(apys[1], 0);
+        assertFalse(subset[1].isActive);
+    }
+
+    function test_getBalanceIncludesCuratedRewardsWithoutScanningConsensusOrDoubleCounting() public {
+        address delegator = address(0xc08A759F868Ab179F1259b2A7b1B81b0B968710E);
+        uint64 activeValidatorId = ALCHEMY_VALIDATOR_ID;
+        uint64 consensusRewardsValidatorId = 77;
+        uint256 activeStake = 5 ether;
+        uint256 pendingStake = 2 ether;
+        uint256 curatedRewardAmount = 1 ether;
+        uint256 consensusRewardAmount = 3 ether;
+
+        uint64[] memory validators = new uint64[](2);
+        validators[0] = activeValidatorId;
+        validators[1] = consensusRewardsValidatorId;
+        _mockConsensusSet(validators);
+
+        uint64[] memory activeDelegations = new uint64[](1);
+        activeDelegations[0] = activeValidatorId;
+
+        _mockDelegations(delegator, activeDelegations);
+        _mockKnownValidators(delegator);
+        _mockDelegator(delegator, activeValidatorId, activeStake, 0, pendingStake, 0);
+        _mockDelegator(delegator, MONADVISION_VALIDATOR_ID, 0, curatedRewardAmount, 0, 0);
+        _mockDelegator(delegator, consensusRewardsValidatorId, 0, consensusRewardAmount, 0, 0);
+
+        (uint256 staked, uint256 pending, uint256 rewards) = lens.getBalance(delegator);
+
+        assertEq(staked, activeStake);
+        assertEq(pending, pendingStake);
+        assertEq(rewards, curatedRewardAmount);
+    }
+
     function test_getDelegationsIncludesPositionsWithoutActiveDelegations() public {
         address delegator = address(0xc08A759F868Ab179F1259b2A7b1B81b0B968710E);
         uint64 withdrawValidatorId = 7;
@@ -62,35 +117,46 @@ contract StakingLensTest is Test {
 
         _mockEpoch(currentEpoch);
         _mockDelegations(delegator, new uint64[](0));
+        _mockKnownValidators(delegator);
         _mockDelegator(delegator, withdrawValidatorId, 0, 0, 0, 0);
         _mockDelegator(delegator, rewardsValidatorId, 0, rewardAmount, 0, 0);
 
-        _mockWithdrawalRequest(withdrawValidatorId, delegator, 0, withdrawAmount, withdrawEpoch);
-        for (uint8 withdrawId = 1; withdrawId < lens.MAX_WITHDRAW_IDS(); ++withdrawId) {
-            _mockWithdrawalRequest(withdrawValidatorId, delegator, withdrawId, 0, 0);
-        }
-        for (uint8 withdrawId = 0; withdrawId < lens.MAX_WITHDRAW_IDS(); ++withdrawId) {
-            _mockWithdrawalRequest(rewardsValidatorId, delegator, withdrawId, 0, 0);
-        }
+        _mockWithdrawalRequests(
+            withdrawValidatorId, delegator, 0, withdrawAmount, withdrawEpoch, lens.MAX_WITHDRAW_IDS()
+        );
 
         StakingLens.Delegation[] memory positions = lens.getDelegations(delegator);
 
         assertEq(positions.length, 2);
 
-        assertEq(positions[0].validatorId, withdrawValidatorId);
-        assertEq(positions[0].withdrawId, 0);
-        assertEq(uint8(positions[0].state), uint8(StakingLens.DelegationState.Deactivating));
-        assertEq(positions[0].amount, withdrawAmount);
-        assertEq(positions[0].rewards, 0);
-        assertEq(positions[0].withdrawEpoch, withdrawEpoch);
-        assertGt(positions[0].completionTimestamp, 0);
+        bool foundWithdraw;
+        bool foundRewards;
+        for (uint256 i = 0; i < positions.length; ++i) {
+            StakingLens.Delegation memory position = positions[i];
 
-        assertEq(positions[1].validatorId, rewardsValidatorId);
-        assertEq(uint8(positions[1].state), uint8(StakingLens.DelegationState.Active));
-        assertEq(positions[1].amount, 0);
-        assertEq(positions[1].rewards, rewardAmount);
-        assertEq(positions[1].withdrawEpoch, 0);
-        assertEq(positions[1].completionTimestamp, 0);
+            if (
+                position.validatorId == withdrawValidatorId
+                    && position.state == StakingLens.DelegationState.Deactivating
+            ) {
+                foundWithdraw = true;
+                assertEq(position.withdrawId, 0);
+                assertEq(position.amount, withdrawAmount);
+                assertEq(position.rewards, 0);
+                assertEq(position.withdrawEpoch, withdrawEpoch);
+                assertGt(position.completionTimestamp, 0);
+            }
+
+            if (position.validatorId == rewardsValidatorId && position.state == StakingLens.DelegationState.Active) {
+                foundRewards = true;
+                assertEq(position.amount, 0);
+                assertEq(position.rewards, rewardAmount);
+                assertEq(position.withdrawEpoch, 0);
+                assertEq(position.completionTimestamp, 0);
+            }
+        }
+
+        assertTrue(foundWithdraw);
+        assertTrue(foundRewards);
     }
 
     function test_getDelegationsIncludesWithdrawalsWhenActiveDelegationsExist() public {
@@ -112,18 +178,13 @@ contract StakingLensTest is Test {
 
         _mockEpoch(currentEpoch);
         _mockDelegations(delegator, activeDelegations);
+        _mockKnownValidators(delegator);
         _mockDelegator(delegator, activeValidatorId, activeStake, 0, 0, 0);
         _mockDelegator(delegator, withdrawValidatorId, 0, 0, 0, 0);
 
-        for (uint8 withdrawId = 0; withdrawId < lens.MAX_WITHDRAW_IDS(); ++withdrawId) {
-            _mockWithdrawalRequest(activeValidatorId, delegator, withdrawId, 0, 0);
-        }
-        _mockWithdrawalRequest(withdrawValidatorId, delegator, 1, withdrawAmount, withdrawEpoch);
-        for (uint8 withdrawId = 0; withdrawId < lens.MAX_WITHDRAW_IDS(); ++withdrawId) {
-            if (withdrawId != 1) {
-                _mockWithdrawalRequest(withdrawValidatorId, delegator, withdrawId, 0, 0);
-            }
-        }
+        _mockWithdrawalRequests(
+            withdrawValidatorId, delegator, 1, withdrawAmount, withdrawEpoch, lens.MAX_WITHDRAW_IDS()
+        );
 
         StakingLens.Delegation[] memory positions = lens.getDelegations(delegator);
 
@@ -155,10 +216,325 @@ contract StakingLensTest is Test {
         assertTrue(foundWithdraw);
     }
 
+    function test_getDelegationsFullScansActiveValidatorsBeyondShallowScanRange() public {
+        address delegator = address(0xc08A759F868Ab179F1259b2A7b1B81b0B968710E);
+        uint64 activeValidatorId = 42;
+        uint64 currentEpoch = 3;
+        uint64 withdrawEpoch = 4;
+        uint8 highWithdrawId = 42;
+        uint256 activeStake = 5 ether;
+        uint256 withdrawAmount = 2 ether;
+
+        uint64[] memory validators = new uint64[](1);
+        validators[0] = activeValidatorId;
+        _mockConsensusSet(validators);
+
+        uint64[] memory activeDelegations = new uint64[](1);
+        activeDelegations[0] = activeValidatorId;
+
+        _mockEpoch(currentEpoch);
+        _mockDelegations(delegator, activeDelegations);
+        _mockKnownValidators(delegator);
+        _mockDelegator(delegator, activeValidatorId, activeStake, 0, 0, 0);
+        _mockWithdrawalRequests(
+            activeValidatorId, delegator, highWithdrawId, withdrawAmount, withdrawEpoch, lens.FULL_SCAN_WITHDRAW_IDS()
+        );
+
+        StakingLens.Delegation[] memory positions = lens.getDelegations(delegator);
+
+        assertEq(positions.length, 2);
+
+        bool foundActive;
+        bool foundWithdraw;
+        for (uint256 i = 0; i < positions.length; ++i) {
+            StakingLens.Delegation memory position = positions[i];
+
+            if (position.validatorId == activeValidatorId && position.state == StakingLens.DelegationState.Active) {
+                foundActive = true;
+                assertEq(position.amount, activeStake);
+            }
+
+            if (
+                position.validatorId == activeValidatorId && position.state == StakingLens.DelegationState.Deactivating
+                    && position.withdrawId == highWithdrawId
+            ) {
+                foundWithdraw = true;
+                assertEq(position.amount, withdrawAmount);
+                assertEq(position.withdrawEpoch, withdrawEpoch);
+            }
+        }
+
+        assertTrue(foundActive);
+        assertTrue(foundWithdraw);
+    }
+
+    function test_getDelegationsShallowScansActiveValidatorsPastFullScanCap() public {
+        address delegator = address(0xc08A759F868Ab179F1259b2A7b1B81b0B968710E);
+        uint64 currentEpoch = 3;
+        uint64 withdrawEpoch = 4;
+        uint8 shallowWithdrawId = 1;
+        uint8 highWithdrawId = 42;
+        uint256 activeStake = 5 ether;
+        uint256 withdrawAmount = 2 ether;
+        uint64[] memory activeDelegations = _sequentialValidatorIds(100, lens.MAX_FULL_SCAN_VALIDATORS());
+        uint256 firstShallowActiveIndex = uint256(lens.MAX_FULL_SCAN_VALIDATORS()) - _curatedValidatorIds().length;
+        uint64 shallowValidatorId = activeDelegations[firstShallowActiveIndex];
+
+        _mockConsensusSet(activeDelegations);
+        _mockEpoch(currentEpoch);
+        _mockDelegations(delegator, activeDelegations);
+        _mockKnownValidators(delegator);
+        _mockEmptyValidators(delegator, activeDelegations, lens.FULL_SCAN_WITHDRAW_IDS());
+        _mockDelegator(delegator, shallowValidatorId, activeStake, 0, 0, 0);
+        _mockWithdrawalRequest(shallowValidatorId, delegator, shallowWithdrawId, withdrawAmount, withdrawEpoch);
+        _mockWithdrawalRequest(shallowValidatorId, delegator, highWithdrawId, withdrawAmount, withdrawEpoch);
+
+        StakingLens.Delegation[] memory positions = lens.getDelegations(delegator);
+
+        bool foundActive;
+        bool foundShallowWithdraw;
+        bool foundHighWithdraw;
+        for (uint256 i = 0; i < positions.length; ++i) {
+            StakingLens.Delegation memory position = positions[i];
+
+            if (position.validatorId != shallowValidatorId) {
+                continue;
+            }
+
+            if (position.state == StakingLens.DelegationState.Active) {
+                foundActive = true;
+                assertEq(position.amount, activeStake);
+            }
+
+            if (position.state == StakingLens.DelegationState.Deactivating && position.withdrawId == shallowWithdrawId)
+            {
+                foundShallowWithdraw = true;
+                assertEq(position.amount, withdrawAmount);
+            }
+
+            if (position.state == StakingLens.DelegationState.Deactivating && position.withdrawId == highWithdrawId) {
+                foundHighWithdraw = true;
+            }
+        }
+
+        assertTrue(foundActive);
+        assertTrue(foundShallowWithdraw);
+        assertFalse(foundHighWithdraw);
+    }
+
+    function test_getDelegationsShallowScansCuratedValidatorsWithoutNativeDelegations() public {
+        address delegator = address(0xc08A759F868Ab179F1259b2A7b1B81b0B968710E);
+        uint64 currentEpoch = 2506;
+        uint64 withdrawEpoch = 2500;
+        uint8 lowWithdrawId = 1;
+        uint8 highWithdrawId = 42;
+        uint256 withdrawAmount = 3801 ether;
+        uint256 rewardAmount = 20 ether;
+        uint64[] memory nativeDelegations = new uint64[](2);
+        nativeDelegations[0] = ALCHEMY_VALIDATOR_ID;
+        nativeDelegations[1] = STAKIN_VALIDATOR_ID;
+
+        _mockConsensusSet(nativeDelegations);
+        _mockEpoch(currentEpoch);
+        _mockDelegations(delegator, nativeDelegations);
+        _mockKnownValidators(delegator);
+        _mockDelegator(delegator, MONADVISION_VALIDATOR_ID, 0, rewardAmount, 0, 0);
+        _mockWithdrawalRequest(MONADVISION_VALIDATOR_ID, delegator, lowWithdrawId, withdrawAmount, withdrawEpoch);
+        _mockWithdrawalRequest(EVERSTAKE_VALIDATOR_ID, delegator, highWithdrawId, withdrawAmount, withdrawEpoch);
+
+        vm.expectCall(
+            STAKING_PRECOMPILE,
+            abi.encodeCall(IStaking.getWithdrawalRequest, (ALCHEMY_VALIDATOR_ID, delegator, highWithdrawId)),
+            1
+        );
+        vm.expectCall(
+            STAKING_PRECOMPILE,
+            abi.encodeCall(IStaking.getWithdrawalRequest, (MONADVISION_VALIDATOR_ID, delegator, highWithdrawId)),
+            0
+        );
+        vm.expectCall(
+            STAKING_PRECOMPILE,
+            abi.encodeCall(IStaking.getWithdrawalRequest, (EVERSTAKE_VALIDATOR_ID, delegator, highWithdrawId)),
+            0
+        );
+
+        StakingLens.Delegation[] memory positions = lens.getDelegations(delegator);
+
+        assertEq(positions.length, 2);
+        assertEq(positions[0].validatorId, MONADVISION_VALIDATOR_ID);
+        assertEq(positions[0].withdrawId, lowWithdrawId);
+        assertEq(uint8(positions[0].state), uint8(StakingLens.DelegationState.AwaitingWithdrawal));
+        assertEq(positions[0].amount, withdrawAmount);
+        assertEq(positions[1].validatorId, MONADVISION_VALIDATOR_ID);
+        assertEq(uint8(positions[1].state), uint8(StakingLens.DelegationState.Active));
+        assertEq(positions[1].amount, 0);
+        assertEq(positions[1].rewards, rewardAmount);
+    }
+
+    function test_getDelegationsFullScansCuratedValidatorsWithNativeDelegations() public {
+        address delegator = address(0xc08A759F868Ab179F1259b2A7b1B81b0B968710E);
+        uint64 currentEpoch = 3;
+        uint64 withdrawEpoch = 4;
+        uint8 highWithdrawId = 42;
+        uint256 withdrawAmount = 2 ether;
+        uint64[] memory curatedValidatorIds = _curatedValidatorIds();
+
+        _mockConsensusSet(curatedValidatorIds);
+
+        _mockEpoch(currentEpoch);
+        _mockDelegations(delegator, curatedValidatorIds);
+        _mockKnownValidators(delegator);
+
+        for (uint256 i = 0; i < curatedValidatorIds.length; ++i) {
+            _mockWithdrawalRequests(
+                curatedValidatorIds[i],
+                delegator,
+                highWithdrawId,
+                withdrawAmount,
+                withdrawEpoch,
+                lens.FULL_SCAN_WITHDRAW_IDS()
+            );
+        }
+
+        StakingLens.Delegation[] memory positions = lens.getDelegations(delegator);
+
+        assertEq(positions.length, curatedValidatorIds.length);
+
+        for (uint256 i = 0; i < curatedValidatorIds.length; ++i) {
+            bool foundValidator;
+
+            for (uint256 j = 0; j < positions.length; ++j) {
+                StakingLens.Delegation memory position = positions[j];
+                if (position.validatorId != curatedValidatorIds[i]) {
+                    continue;
+                }
+
+                foundValidator = true;
+                assertEq(position.withdrawId, highWithdrawId);
+                assertEq(uint8(position.state), uint8(StakingLens.DelegationState.Deactivating));
+                assertEq(position.amount, withdrawAmount);
+                assertEq(position.withdrawEpoch, withdrawEpoch);
+                break;
+            }
+
+            assertTrue(foundValidator);
+        }
+    }
+
+    function test_getDelegationsPrioritizesCuratedValidatorsBeforeActiveDelegationCap() public {
+        address delegator = address(0xc08A759F868Ab179F1259b2A7b1B81b0B968710E);
+        uint64 currentEpoch = 3;
+        uint64 withdrawEpoch = 4;
+        uint8 lastShallowWithdrawId = 7;
+        uint256 withdrawAmount = 2 ether;
+        uint64[] memory activeDelegations = _sequentialValidatorIds(100, lens.MAX_DELEGATIONS());
+
+        _mockConsensusSet(activeDelegations);
+        _mockEpoch(currentEpoch);
+        _mockDelegations(delegator, activeDelegations);
+        _mockKnownValidators(delegator);
+        _mockEmptyValidators(delegator, activeDelegations, lens.FULL_SCAN_WITHDRAW_IDS());
+        _mockWithdrawalRequests(
+            EVERSTAKE_VALIDATOR_ID,
+            delegator,
+            lastShallowWithdrawId,
+            withdrawAmount,
+            withdrawEpoch,
+            lens.FULL_SCAN_WITHDRAW_IDS()
+        );
+
+        StakingLens.Delegation[] memory positions = lens.getDelegations(delegator);
+
+        assertEq(positions.length, 1);
+        assertEq(positions[0].validatorId, EVERSTAKE_VALIDATOR_ID);
+        assertEq(positions[0].withdrawId, lastShallowWithdrawId);
+        assertEq(uint8(positions[0].state), uint8(StakingLens.DelegationState.Deactivating));
+        assertEq(positions[0].amount, withdrawAmount);
+        assertEq(positions[0].withdrawEpoch, withdrawEpoch);
+    }
+
+    function test_getDelegationsFindsLastLegacyFallbackWithdrawalAlongsideCurated() public {
+        address delegator = address(0xbeef);
+        uint64[] memory ids = _sequentialValidatorIds(100, 128);
+        _mockConsensusSet(ids);
+        _mockDelegations(delegator, new uint64[](0));
+        _mockEpoch(5);
+        _mockKnownValidators(delegator);
+        _mockEmptyValidators(delegator, ids, lens.MAX_WITHDRAW_IDS());
+        _mockWithdrawalRequest(227, delegator, 1, 9 ether, 3);
+        _mockWithdrawalRequest(MONADVISION_VALIDATOR_ID, delegator, 7, 7 ether, 3);
+        StakingLens.Delegation[] memory rows = lens.getDelegations(delegator);
+        assertEq(rows.length, 2);
+        assertEq(rows[0].withdrawId, 7);
+        assertEq(rows[0].validatorId, MONADVISION_VALIDATOR_ID);
+        assertEq(rows[1].validatorId, 227);
+        assertEq(rows[1].withdrawId, 1);
+        assertEq(rows[1].amount, 9 ether);
+    }
+
+    function test_allBalancePagesAndFirst128ActivePositions() public {
+        address delegator = address(0xbeef);
+        uint64[] memory first = _sequentialValidatorIds(100, 100);
+        uint64[] memory second = _sequentialValidatorIds(200, 29);
+        vm.mockCall(
+            STAKING_PRECOMPILE,
+            abi.encodeCall(IStaking.getDelegations, (delegator, 0)),
+            abi.encode(false, uint64(200), first)
+        );
+        vm.mockCall(
+            STAKING_PRECOMPILE,
+            abi.encodeCall(IStaking.getDelegations, (delegator, 200)),
+            abi.encode(true, uint64(0), second)
+        );
+        vm.mockCall(
+            STAKING_PRECOMPILE,
+            abi.encodePacked(IStaking.getDelegator.selector),
+            abi.encode(uint256(1 ether), 0, 0, 0, 0, uint64(0), uint64(0))
+        );
+        vm.mockCall(
+            STAKING_PRECOMPILE,
+            abi.encodePacked(IStaking.getWithdrawalRequest.selector),
+            abi.encode(uint256(0), 0, uint64(0))
+        );
+        _mockKnownValidators(delegator);
+        _mockEpoch(5);
+        (uint256 staked,,) = lens.getBalance(delegator);
+        assertEq(staked, 129 ether);
+        StakingLens.Delegation[] memory rows = lens.getDelegations(delegator);
+        assertEq(rows.length, 128);
+        assertEq(rows[127].validatorId, 227);
+    }
+
+    function test_getDelegationsKeepsDistinctValidatorsWithTheSameBitmapBit() public {
+        address delegator = address(0xbeef);
+        uint64[] memory active = new uint64[](2);
+        active[0] = 272;
+        active[1] = 272;
+        uint64[] memory consensus = new uint64[](4);
+        consensus[0] = 16;
+        consensus[1] = 272;
+        consensus[2] = 528;
+        consensus[3] = 528;
+        _mockDelegations(delegator, active);
+        _mockConsensusSet(consensus);
+        _mockEpoch(5);
+        _mockKnownValidators(delegator);
+        _mockEmptyValidators(delegator, active, lens.FULL_SCAN_WITHDRAW_IDS());
+        _mockDelegator(delegator, 528, 0, 0, 0, 0);
+        _mockWithdrawalRequests(528, delegator, 1, 9 ether, 3, lens.MAX_WITHDRAW_IDS());
+        _mockWithdrawalRequest(272, delegator, 255, 5 ether, 3);
+        _mockWithdrawalRequest(16, delegator, 7, 3 ether, 3);
+        StakingLens.Delegation[] memory rows = lens.getDelegations(delegator);
+        assertEq(rows.length, 3);
+        assertEq(rows[0].validatorId, 16);
+        assertEq(rows[1].validatorId, 272);
+        assertEq(rows[1].withdrawId, 255);
+        assertEq(rows[2].validatorId, 528);
+        assertEq(rows[2].withdrawId, 1);
+    }
+
     function _mockConsensusSet() internal {
-        bytes memory data = abi.encodeCall(IStaking.getConsensusValidatorSet, (0));
-        bytes memory result = abi.encode(true, uint32(0), validatorIds);
-        vm.mockCall(STAKING_PRECOMPILE, data, result);
+        _mockConsensusSet(validatorIds);
     }
 
     function _mockConsensusSet(uint64[] memory ids) internal {
@@ -221,6 +597,54 @@ contract StakingLensTest is Test {
         bytes memory data = abi.encodeCall(IStaking.getWithdrawalRequest, (validatorId, delegator, withdrawId));
         bytes memory result = abi.encode(amount, uint256(0), withdrawEpoch);
         vm.mockCall(STAKING_PRECOMPILE, data, result);
+    }
+
+    function _mockWithdrawalRequests(
+        uint64 validatorId,
+        address delegator,
+        uint8 nonZeroWithdrawId,
+        uint256 amount,
+        uint64 withdrawEpoch,
+        uint16 scanLimit
+    ) internal {
+        for (uint16 withdrawId = 0; withdrawId < scanLimit; ++withdrawId) {
+            uint256 requestAmount = withdrawId == nonZeroWithdrawId ? amount : 0;
+            uint64 requestEpoch = withdrawId == nonZeroWithdrawId ? withdrawEpoch : 0;
+            // casting is safe because the test only passes scan limits within the uint8 withdraw id range
+            // forge-lint: disable-next-line(unsafe-typecast)
+            _mockWithdrawalRequest(validatorId, delegator, uint8(withdrawId), requestAmount, requestEpoch);
+        }
+    }
+
+    function _mockKnownValidators(address delegator) internal {
+        _mockEmptyValidators(delegator, _curatedValidatorIds(), lens.FULL_SCAN_WITHDRAW_IDS());
+    }
+
+    function _mockEmptyValidators(address delegator, uint64[] memory validatorIdsToMock, uint16 scanLimit) internal {
+        for (uint256 i = 0; i < validatorIdsToMock.length; ++i) {
+            _mockDelegator(delegator, validatorIdsToMock[i], 0, 0, 0, 0);
+            _mockWithdrawalRequests(validatorIdsToMock[i], delegator, 0, 0, 0, scanLimit);
+        }
+    }
+
+    function _curatedValidatorIds() internal pure returns (uint64[] memory ids) {
+        ids = new uint64[](4);
+        ids[0] = MONADVISION_VALIDATOR_ID;
+        ids[1] = ALCHEMY_VALIDATOR_ID;
+        ids[2] = STAKIN_VALIDATOR_ID;
+        ids[3] = EVERSTAKE_VALIDATOR_ID;
+    }
+
+    function _sequentialValidatorIds(uint64 startValidatorId, uint16 count)
+        internal
+        pure
+        returns (uint64[] memory ids)
+    {
+        ids = new uint64[](uint256(count));
+
+        for (uint16 i = 0; i < count; ++i) {
+            ids[i] = startValidatorId + uint64(i);
+        }
     }
 
     function _expectedNetworkApy() internal view returns (uint64) {
