@@ -12,8 +12,17 @@ build-monad:
 test:
     forge test
 
+test-hub-reader:
+    forge test --match-path 'test/hub_reader/*'
+
+format:
+    forge fmt
+
+lint:
+    forge lint
+
 test-monad:
-    forge test --match-path test/monad/*
+    forge test --match-path 'test/monad/*'
 
 deploy-hub-reader:
     forge script script/hub_reader/HubReader.s.sol:HubReaderScript --rpc-url "$BSC_RPC_URL" --broadcast --verify -vvvv
