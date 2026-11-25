@@ -1,34 +1,32 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
-- Core Solidity modules live in `src/`, split into `src/hub_reader` and `src/monad`; shared utilities live in `src/library`.
-- Automation scripts reside in `script/` (Foundry); compiled artifacts land in `out/`.
-- Tests live in `test/` using `.t.sol` suffixes; dependencies stay in `lib/`; align configuration via root-level `foundry.toml` and `.env.example`.
+Guidance for Coding Agents (Claude Code, Codex, etc.) collaborating in this repository. This file is the routing layer plus the non-negotiable rules. Everything else lives in a skill; load only what the task needs.
 
-## Build, Test, and Development Commands
-- `forge build` or `just build` compiles the workspace with default remappings.
-- `forge test` and `forge test --rpc-url $BSC_RPC_URL` execute the suite locally or against a fork.
-- `forge lint` then `forge fmt` keep Solidity style consistent; run them before sharing branches.
-- `just deploy-hub-reader` and `just deploy-monad-staking` broadcast deployments through the prewired RPCs.
+## Using the Guidance
 
-## Coding Style & Naming Conventions
-- Use 4-space indentation, `pragma solidity ^0.8.x`, sorted imports, and SPDX identifiers.
-- Name contracts, libraries, and interfaces in PascalCase; state variables in camelCase; constants in ALL_CAPS.
-- Match test filenames to their targets (`StakingLens.t.sol`) and prefix helper contracts with `Test`.
-- Validate formatting with `forge fmt` or `forge fmt --check` before review.
+The user's task defines scope and authorization. Current source and the deployed contracts govern design; nearby code provides examples, not permission to copy a known violation. Agent memory and external skills are advisory and must be checked against these sources. When guidance disagrees with the source, resolve it from the source, fix the stale rule, and ask only if a product or security decision remains unresolved.
 
-## Testing Guidelines
-- Keep integration scenarios in dedicated contracts and isolate unit fixtures per module.
-- Leverage `vm.expectRevert`, `vm.prank`, and explicit `assertEq` messages to clarify intent.
-- When forking, pass the RPC with `--rpc-url` and note chain assumptions in header comments.
-- Prioritize coverage of staking hub reads and Monad staking lens behavior; `forge coverage --report lcov` helps quantify readiness.
+## Skills
 
-## Commit & Pull Request Guidelines
-- Follow the short imperative style seen in history (`add auto formatter`), keeping summaries under 65 characters.
-- Reference tickets, flag deployment or configuration impacts, and list the tests you ran.
-- For PRs, link on-chain transactions, attach explorer URLs or calldata, and note any environment variable or RPC updates.
+`task-workflow.md` and `engineering-principles.md` apply to every task. The rest are load-on-demand; the one-line description tells you when.
 
-## Security & Configuration Tips
-- Copy `.env.example` to `.env`, add RPC URLs and scan keys matching `foundry.toml`, and keep secrets untracked.
-- Limit raw private keys to deployment contexts; favor hardware signing for `forge script --broadcast`.
-- Before merging, confirm remappings, target chain IDs, and contract addresses to avoid wrong-chain deployments.
+- [Task Workflow](skills/task-workflow.md) — Scope, investigation, implementation loop, verification, cleanup rounds, handoff, and guide maintenance
+- [Engineering Principles](skills/engineering-principles.md) — Solidity style, naming, read-lens design rules, and test intent
+- [Project Overview](skills/project-overview.md) — Repo layout, what each contract reads, where it is deployed, and who consumes it
+- [Development Commands](skills/development-commands.md) — Foundry and `just` commands, RPC aliases, and tool caveats
+- [Quality Checks](skills/quality-checks.md) — Iteration and closing checks per change type, and proof of done
+- [Code Review](skills/code-review.md) — Review checklist for correctness, ABI compatibility, gas bounds, and security
+- [Security](skills/security.md) — Deployer key handling, broadcast authorization, and on-chain trust boundaries
+- [Deployment](skills/deployment.md) — Deploy, verify, record the address, update consumers, commits, and publication boundaries
+
+## Non-Negotiables
+
+- A deployed contract is immutable and its address and ABI are pinned in [Gem Wallet Core](skills/project-overview.md#consumers). Changing an external function signature, a returned struct, or an enum order is a breaking change that needs a new deployment and a coordinated Core update; say so before editing.
+- Never broadcast a transaction, verify a contract, or run a `just deploy-*` or `just verify-*` recipe unless the user asked for that action in this session. See [Deployment](skills/deployment.md#publication-boundaries).
+- Never read out, log, commit, or paste the contents of `.env`, and never put a private key in it. The deployer key lives in an encrypted Foundry keystore. See [Security](skills/security.md).
+- Local checks are the gate: CI cannot run the `HubReader` fork tests. See [Quality Checks](skills/quality-checks.md).
+- Do not edit `lib/` (git submodules), `out/`, `cache/`, or `broadcast/`.
+
+## Task Completion
+
+Follow [Task Workflow](skills/task-workflow.md#4-verify-the-actual-result) for verification, both cleanup rounds, and handoff; [Quality Checks](skills/quality-checks.md) defines the required commands. Review deployment, key-handling, and CI changes with [Security](skills/security.md#review-checklist).

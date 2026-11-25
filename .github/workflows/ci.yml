@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 env:
   FOUNDRY_PROFILE: ci
 
@@ -17,11 +20,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
         with:
-          version: nightly
+          version: v1.10.0
 
       - name: Forge lint
         run: |
@@ -34,7 +38,13 @@ jobs:
           forge build --sizes
         id: build
 
-      # - name: Forge tests
-      #   run: |
-      #     forge test -vvv --rpc-url ${{ secrets.BSC_RPC_URL }}
-      #   id: test
+      - name: Forge format
+        run: |
+          forge fmt --check
+        id: format
+
+      # HubReader fork tests need BSC_RPC_URL and are skipped here.
+      - name: Forge tests
+        run: |
+          forge test -vvv
+        id: test

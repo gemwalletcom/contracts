@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IStaking} from "./IStaking.sol";
 
 contract StakingLens {
-    using Strings for uint256;
-
     IStaking public constant STAKING = IStaking(0x0000000000000000000000000000000000001000);
 
     uint16 public constant MAX_DELEGATIONS = 128;
