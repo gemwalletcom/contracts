@@ -25,10 +25,10 @@ test-monad:
     forge test --match-path 'test/monad/*'
 
 deploy-hub-reader:
-    forge script script/hub_reader/HubReader.s.sol:HubReaderScript --rpc-url "$BSC_RPC_URL" --broadcast --verify -vvvv
+    forge script script/hub_reader/HubReader.s.sol:HubReaderScript --rpc-url "$BSC_RPC_URL" --account "$DEPLOYER_ACCOUNT" --broadcast --verify -vvvv
 
 deploy-monad-staking:
-    forge script --force script/monad/StakingLens.s.sol:StakingLensScript --rpc-url "$MONAD_RPC_URL" --broadcast -vvvv
+    forge script --force script/monad/StakingLens.s.sol:StakingLensScript --rpc-url "$MONAD_RPC_URL" --account "$DEPLOYER_ACCOUNT" --broadcast -vvvv
 
 read-staking-lens-address BROADCAST_FILE="broadcast/StakingLens.s.sol/143/run-latest.json":
     #!/usr/bin/env bash

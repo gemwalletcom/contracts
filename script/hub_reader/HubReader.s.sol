@@ -6,8 +6,7 @@ import {HubReader} from "../../src/hub_reader/HubReader.sol";
 
 contract HubReaderScript is Script {
     function run() public {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast();
         HubReader reader = new HubReader();
         console.log("HubReader deployed to:", address(reader));
         vm.stopBroadcast();

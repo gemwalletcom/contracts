@@ -8,13 +8,15 @@ Gem Wallet deployment helpers and read lenses.
 ## Development
 
 1) Install [Foundry](https://book.getfoundry.sh/).
-2) Copy `.env.example` to `.env` and fill RPCs (including `MONAD_RPC_URL`), explorer keys, and `PRIVATE_KEY` for deploys.
+2) Run `git submodule update --init --recursive`.
+3) Copy `.env.example` to `.env` and fill RPCs (including `MONAD_RPC_URL`) and explorer keys.
+4) For deploys, import the deployer into an encrypted keystore with `cast wallet import deployer --interactive` and set `DEPLOYER_ACCOUNT` to its name. No private key goes in `.env`.
 
 ## Common Tasks
 
 - Build: `forge build`
 - Lint/format: `forge lint && forge fmt`
-- Test: `forge test` (HubReader tests expect a live BSC RPC; the Monad lens tests are mocked)
+- Test: `forge test` (the Monad lens tests are mocked; the HubReader tests fork BSC mainnet and are skipped unless `BSC_RPC_URL` is set)
 
 ## Deploy
 
