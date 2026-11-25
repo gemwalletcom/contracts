@@ -7,6 +7,8 @@ src = "src"
 out = "out"
 libs = ["lib"]
 via_ir = true
+additional_compiler_profiles = [{ name = "monad", optimizer = true, optimizer_runs = 10000 }]
+compilation_restrictions = [{ paths = "src/monad/StakingLens.sol", optimizer_runs = 10000 }]
 
 [profile.ci]
 
